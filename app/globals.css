@@ -3,6 +3,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Site plan palette */
+  --map-paper: #f7f5ef;
+  --map-ink: #3f3f46;
+  --map-line: #9c9a93;
+  --map-road: #e6e3db;
+  --map-road-line: #c9c5bb;
+  --map-open-space: #cfe3c8;
+  --map-institutional: #cfdcea;
+  --map-commercial: #e6d6ea;
+  --map-available: #a7e8bd;
+  --map-sold: #f7b6bd;
+  --map-progress: #f8d98a;
+  --map-match: #2563eb;
+  --map-selected: #111827;
+  --map-selected-fill: #ffffff33;
 }
 
 @theme inline {
@@ -16,11 +32,36 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    --map-paper: #17181b;
+    --map-ink: #d4d4d8;
+    --map-line: #55565c;
+    --map-road: #26272b;
+    --map-road-line: #3a3b40;
+    --map-open-space: #24402c;
+    --map-institutional: #24354a;
+    --map-commercial: #3a2b45;
+    --map-available: #2f7350;
+    --map-sold: #7d3341;
+    --map-progress: #7d6127;
+    --map-match: #60a5fa;
+    --map-selected: #fafafa;
+    --map-selected-fill: #ffffff1f;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/*
+ * Status filtering is done in CSS rather than React state so that filtering
+ * 1,200+ stand polygons costs a single attribute change instead of a re-render.
+ */
+.map-stands[data-filter="available"] > polygon:not([data-status="available"]),
+.map-stands[data-filter="sold"] > polygon:not([data-status="sold"]),
+.map-stands[data-filter="in-progress"] > polygon:not([data-status="in-progress"]) {
+  opacity: 0.12;
 }
