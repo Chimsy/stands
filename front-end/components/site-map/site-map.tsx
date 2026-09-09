@@ -39,7 +39,7 @@ export function SiteMap({ plan, stands, selectedId, matchIds, statusFilter, focu
   // so the stand under the pointer is recorded when the gesture starts.
   const pointerDownRef = useRef<{ x: number; y: number; standId?: string } | null>(null);
 
-  const standsById = useMemo(() => new Map(stands.map((stand) => [stand.id, stand])), [stands]);
+  const standsById = useMemo(() => new Map(stands.map((stand) => [stand.standNumber, stand])), [stands]);
   const selected = selectedId ? standsById.get(selectedId) : undefined;
   const hovered = hoveredId ? standsById.get(hoveredId) : undefined;
 
@@ -75,8 +75,8 @@ export function SiteMap({ plan, stands, selectedId, matchIds, statusFilter, focu
     () =>
       stands.map((stand) => (
         <polygon
-          key={stand.id}
-          data-stand-id={stand.id}
+          key={stand.standNumber}
+          data-stand-id={stand.standNumber}
           data-status={stand.status}
           points={toPath(stand.points)}
           fill={STAND_STATUS_FILL[stand.status]}
@@ -90,7 +90,7 @@ export function SiteMap({ plan, stands, selectedId, matchIds, statusFilter, focu
   const standLabelLayer = useMemo(
     () =>
       stands.map((stand) => (
-        <text key={stand.id} x={stand.centroid.x} y={stand.centroid.y} textAnchor="middle" dominantBaseline="middle" fontSize={3.4}>
+        <text key={stand.standNumber} x={stand.centroid.x} y={stand.centroid.y} textAnchor="middle" dominantBaseline="middle" fontSize={3.4}>
           {stand.standNumber}
         </text>
       )),
@@ -102,8 +102,8 @@ export function SiteMap({ plan, stands, selectedId, matchIds, statusFilter, focu
     // both slow and unreadable, so the overlay only draws narrow searches.
     if (!matchIds || matchIds.size === 0 || matchIds.size > MAX_HIGHLIGHTED_MATCHES) return null;
     return stands
-      .filter((stand) => matchIds.has(stand.id))
-      .map((stand) => <polygon key={stand.id} points={toPath(stand.points)} fill="none" stroke="var(--map-match)" strokeWidth={2.5} />);
+      .filter((stand) => matchIds.has(stand.standNumber))
+      .map((stand) => <polygon key={stand.standNumber} points={toPath(stand.points)} fill="none" stroke="var(--map-match)" strokeWidth={2.5} />);
   }, [matchIds, stands]);
 
   function handleClick(event: React.MouseEvent) {

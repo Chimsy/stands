@@ -21,11 +21,11 @@ export function StandLocator({ plan, stand, neighbours, radius }: { plan: SitePl
         <polygon key={zone.id} points={toPath(zone.points)} fill="var(--map-open-space)" stroke="var(--map-line)" strokeWidth={0.4} />
       ))}
       {neighbours.map((neighbour) => (
-        <polygon key={neighbour.id} points={toPath(neighbour.points)} fill={STAND_STATUS_FILL[neighbour.status]} stroke="var(--map-line)" strokeWidth={0.4} />
+        <polygon key={neighbour.standNumber} points={toPath(neighbour.points)} fill={STAND_STATUS_FILL[neighbour.status]} stroke="var(--map-line)" strokeWidth={0.4} />
       ))}
       {neighbours.map((neighbour) => (
         <text
-          key={neighbour.id}
+          key={neighbour.standNumber}
           x={neighbour.centroid.x}
           y={neighbour.centroid.y}
           fontSize={5}

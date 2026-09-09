@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 /**
- * Generates the sample cadastral layout used by the site map:
- *   data/site-plan.json  - boundary, roads, zones and block labels
- *   data/stands.json     - individual numbered stands
+ * Generates the sample cadastral layout the backend seeds from:
+ *   ../database/data/site-plan.json  - boundary, roads, zones and block labels
+ *   ../database/data/stands.json     - individual numbered stands
+ *
+ * These are fixtures for `database/seeders/SitePlanSeeder.php`, not runtime
+ * data. After regenerating, re-seed with `php artisan db:seed --class=SitePlanSeeder`.
  *
  * Geometry is authored in metres on an axis-aligned grid, clipped to the estate
  * boundary, then rotated so the plan sits on a surveyed bearing. Deterministic:
@@ -14,7 +17,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "database", "data");
 const SEED = 20260907;
 
 // --- layout constants (metres) ---------------------------------------------
@@ -514,9 +517,9 @@ const standsOut = stands.map((stand) => ({
   centroid: normalisePoint(stand.centroid),
 }));
 
-mkdirSync(resolve(ROOT, "data"), { recursive: true });
-writeFileSync(resolve(ROOT, "data/site-plan.json"), JSON.stringify(sitePlan));
-writeFileSync(resolve(ROOT, "data/stands.json"), JSON.stringify(standsOut));
+mkdirSync(DATA_DIR, { recursive: true });
+writeFileSync(resolve(DATA_DIR, "site-plan.json"), JSON.stringify(sitePlan));
+writeFileSync(resolve(DATA_DIR, "stands.json"), JSON.stringify(standsOut));
 
 const counts = standsOut.reduce((acc, stand) => ({ ...acc, [stand.status]: (acc[stand.status] ?? 0) + 1 }), {});
 const totalArea = standsOut.reduce((sum, stand) => sum + stand.areaSqm, 0);

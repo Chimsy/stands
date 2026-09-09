@@ -10,16 +10,23 @@ class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
 
+    private const DEMO_EMAIL = 'test@example.com';
+
     /**
-     * Seed the application's database.
+     * Seeds the demo account and the sample township.
+     *
+     * Kept idempotent so `composer setup` and a plain re-seed are safe to run
+     * against a database that already has data.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        if (! User::query()->where('email', self::DEMO_EMAIL)->exists()) {
+            User::factory()->create([
+                'name' => 'Test User',
+                'email' => self::DEMO_EMAIL,
+            ]);
+        }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->call(SitePlanSeeder::class);
     }
 }

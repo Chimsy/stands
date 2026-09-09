@@ -31,7 +31,7 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
     );
   }, [stands, normalizedQuery]);
 
-  const matchIds = useMemo(() => (results.length ? new Set(results.map((stand) => stand.id)) : null), [results]);
+  const matchIds = useMemo(() => (results.length ? new Set(results.map((stand) => stand.standNumber)) : null), [results]);
 
   function focusStand(stand: Stand) {
     setSelected(stand);
@@ -87,7 +87,7 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
         <SiteMap
           plan={plan}
           stands={stands}
-          selectedId={selected?.id ?? null}
+          selectedId={selected?.standNumber ?? null}
           matchIds={matchIds}
           statusFilter={statusFilter}
           focusTarget={focusTarget}
@@ -116,7 +116,7 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
 
               <div className="flex gap-2">
                 <Link
-                  href={`/stands/${selected.id}`}
+                  href={`/stands/${selected.standNumber}`}
                   className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
                 >
                   Full profile
@@ -143,12 +143,12 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
               </h2>
               <ul className="flex max-h-72 flex-col gap-0.5 overflow-y-auto">
                 {results.slice(0, MAX_RESULTS).map((stand) => (
-                  <li key={stand.id}>
+                  <li key={stand.standNumber}>
                     <button
                       type="button"
                       onClick={() => focusStand(stand)}
                       className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-black/[.04] dark:hover:bg-white/[.08] ${
-                        selected?.id === stand.id ? "bg-black/[.04] dark:bg-white/[.08]" : ""
+                        selected?.standNumber === stand.standNumber ? "bg-black/[.04] dark:bg-white/[.08]" : ""
                       }`}
                     >
                       <span>

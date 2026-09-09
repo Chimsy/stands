@@ -5,20 +5,20 @@ import type { Metadata } from "next";
 import { StandLocator } from "@/components/site-map/stand-locator";
 import { StatusBadge } from "@/components/status-badge";
 import { formatPrice } from "@/lib/format";
-import { getSitePlan, getStandById, getStandsNear } from "@/lib/stands";
+import { getSitePlan, getStandByNumber, getStandsNear } from "@/lib/stands";
 
 const LOCATOR_RADIUS = 110;
 
-export async function generateMetadata(props: PageProps<"/stands/[id]">): Promise<Metadata> {
-  const { id } = await props.params;
-  const stand = await getStandById(id);
+export async function generateMetadata(props: PageProps<"/stands/[standNumber]">): Promise<Metadata> {
+  const { standNumber } = await props.params;
+  const stand = await getStandByNumber(standNumber);
 
   return { title: stand ? `Stand ${stand.standNumber}` : "Stand not found" };
 }
 
-export default async function StandProfilePage(props: PageProps<"/stands/[id]">) {
-  const { id } = await props.params;
-  const [stand, plan] = await Promise.all([getStandById(id), getSitePlan()]);
+export default async function StandProfilePage(props: PageProps<"/stands/[standNumber]">) {
+  const { standNumber } = await props.params;
+  const [stand, plan] = await Promise.all([getStandByNumber(standNumber), getSitePlan()]);
 
   if (!stand) {
     notFound();

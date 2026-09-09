@@ -105,6 +105,13 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
 - Activate the `deploying-to-cloud` skill whenever deploying to Laravel Cloud, configuring Cloud environments or resources, using the Cloud CLI, or troubleshooting Cloud deployments.
 
+=== herd rules ===
+
+# Laravel Herd
+
+- The application is served by Laravel Herd at `https?://[kebab-case-project-dir].test`. Use the `get-absolute-url` tool to generate valid URLs. Never run commands to serve the site. It is always available.
+- Use the `herd` CLI to manage services, PHP versions, and sites (e.g. `herd sites`, `herd services:start <service>`, `herd php:list`). Run `herd list` to discover all available commands.
+
 === laravel/core rules ===
 
 # Do Things the Laravel Way
@@ -159,3 +166,56 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - After the feature tests pass, ask the user to run the complete suite with `php artisan test --compact`.
 
 </laravel-boost-guidelines>
+
+# Stand Locator
+
+> **This section takes precedence over the generated guidelines above.** Two of
+> them no longer apply here: "Frontend Bundling" and "Vite Error". This project
+> has no Vite build and no root `package.json` - if the UI looks stale, the
+> Next.js dev server in `front-end/` is what needs restarting.
+
+Two applications in one repository, talking to each other over HTTP only.
+
+| | |
+| --- | --- |
+| Repository root | Laravel 13 **API-only backend**. Served by Herd at `https://stands.test`. |
+| `front-end/` | Next.js 16 app - the **only** user interface. Runs at `http://localhost:3000`. |
+
+## The backend serves no HTML
+
+Blade, Vite, the asset pipeline and `routes/web.php` were deliberately removed:
+there is no `resources/`, no `vite.config.js`, and no root `package.json`.
+`bootstrap/app.php` registers `api` and `console` routes only, so `/` returns
+404 by design and `tests/Feature/HealthCheckTest.php` protects that.
+
+Do not re-add a web route, a Blade view, or a root `package.json` to render a
+page - the UI belongs in `front-end/`. (`php artisan dev` picks up Vite only
+when a root `package.json` exists, which is why removing it was enough.)
+
+## Working on it
+
+```bash
+composer setup                      # install, key, migrate --seed
+cd front-end && cp .env.example .env.local && npm run dev
+```
+
+Seeded sign-in: `test@example.com` / `password`. Every page and every endpoint
+except `POST /api/v1/login` requires a token.
+
+- Backend tests: `php artisan test --compact`. Format with `vendor/bin/pint --dirty --format agent`.
+- Front-end: `npm run build` and `npx eslint` from `front-end/`.
+- Never run `npm` from the repository root; it has no package manifest.
+
+## Where the data lives
+
+The site map's sample township is **fixture input, not runtime data**. It lives
+in `database/data/*.json`, is imported by `database/seeders/SitePlanSeeder.php`,
+and is regenerated deterministically by `cd front-end && npm run generate:plan`
+(re-seed afterwards). `front-end/` holds no data files of its own.
+
+## Read before editing
+
+`.ai/rules/` holds the settled decisions and the traps - the API contract, the
+front-end's server-side-only API access, the Next 16 `proxy.ts` rename, and a
+SQLite `whereRaw` binding trap that silently returns wrong rows. Start at
+`.ai/rules/index.md` and read every file whose globs match what you are touching.

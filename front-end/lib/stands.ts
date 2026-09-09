@@ -1,29 +1,49 @@
-import sitePlanData from "@/data/site-plan.json";
-import standsData from "@/data/stands.json";
-import type { SitePlan, Stand } from "@/types/stand";
+import { redirect } from "next/navigation";
+
+import { ApiError, apiRequest, type Envelope } from "@/lib/api";
+import type { MapPoint, SitePlan, Stand } from "@/types/stand";
 
 /**
- * Data-access layer for the site map. Every function is async so swapping the
- * JSON imports below for network calls against the backend API won't change
- * any caller. When the API lands, `getStands` is also the place to switch to
- * bounding-box or paginated queries instead of loading the whole township.
+ * Data-access layer for the site map. Every read goes to the Laravel API, and a
+ * rejected token sends the visitor back to the sign-in page rather than
+ * surfacing an error they can do nothing about.
  */
+async function readFromApi<T>(path: string, query?: Record<string, string>): Promise<T> {
+  try {
+    const { data } = await apiRequest<Envelope<T>>(path, { query });
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/login?expired=1");
+    }
+    throw error;
+  }
+}
 
 export async function getSitePlan(): Promise<SitePlan> {
-  return sitePlanData as SitePlan;
+  return readFromApi<SitePlan>("/site-plan");
 }
 
 export async function getStands(): Promise<Stand[]> {
-  return standsData as Stand[];
+  return readFromApi<Stand[]>("/stands");
 }
 
-export async function getStandById(id: string): Promise<Stand | undefined> {
-  const stands = await getStands();
-  return stands.find((stand) => stand.id === id);
+export async function getStandByNumber(standNumber: string): Promise<Stand | undefined> {
+  try {
+    return await readFromApi<Stand>(`/stands/${encodeURIComponent(standNumber)}`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 /** Stands near a point, used to draw the locator map on a stand's profile. */
-export async function getStandsNear(centre: { x: number; y: number }, radius: number): Promise<Stand[]> {
-  const stands = await getStands();
-  return stands.filter((stand) => Math.hypot(stand.centroid.x - centre.x, stand.centroid.y - centre.y) <= radius);
+export async function getStandsNear(centre: MapPoint, radius: number): Promise<Stand[]> {
+  return readFromApi<Stand[]>("/stands", {
+    x: String(centre.x),
+    y: String(centre.y),
+    radius: String(radius),
+  });
 }

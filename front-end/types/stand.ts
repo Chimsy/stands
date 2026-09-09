@@ -7,7 +7,7 @@ export interface MapPoint {
 
 /** Coordinates are metres on the site plan, origin at the plan's top-left corner. */
 export interface Stand {
-  id: string;
+  /** Unique across the township, and the identifier the API routes on. */
   standNumber: string;
   status: StandStatus;
   block: string;
@@ -58,4 +58,10 @@ export interface SitePlan {
   roads: Road[];
   zones: Zone[];
   blocks: BlockLabel[];
+}
+
+export interface AuthenticatedUser {
+  id: number;
+  name: string;
+  email: string;
 }

@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stand Locator - front-end
 
-## Getting Started
+Next.js app for browsing the township site map. All data comes from the Laravel
+API in the parent directory; this app holds no fixtures of its own.
 
-First, run the development server:
+## Getting started
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Start the backend. It is served by Laravel Herd at `https://stands.test`, and
+   needs to have been migrated and seeded:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+   ```bash
+   cd .. && php artisan migrate --seed
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. Point this app at the API:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   cp .env.example .env.local
+   ```
 
-## Learn More
+3. Run the dev server:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   npm run dev
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000). Every page requires a
+signed-in session; the seeded account is `test@example.com` / `password`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## How it talks to the API
 
-## Deploy on Vercel
+- `lib/api.ts` is the only place that calls `fetch`. It reads the API token from
+  an httpOnly cookie and sends it as a bearer token, so the browser never sees
+  the token and never talks to the backend directly.
+- `lib/stands.ts` is the data-access layer the pages use. Swapping endpoints or
+  adding filters happens there, not in components.
+- `proxy.ts` turns visitors without a session cookie away before a page renders.
+  That is an optimistic check only; `app/(app)/layout.tsx` confirms the token
+  against the API on every request.
+- Local HTTPS: Herd signs `stands.test` with its own certificate authority,
+  which macOS trusts but Node does not. `scripts/run-next.mjs` points
+  `NODE_EXTRA_CA_CERTS` at that CA before starting Next, which is why the npm
+  scripts go through it.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Sample data
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run generate:plan` regenerates the deterministic sample township into
+`../database/data/`. Re-seed the backend afterwards with
+`php artisan db:seed --class=SitePlanSeeder`.
