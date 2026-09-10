@@ -36,6 +36,12 @@ export interface Envelope<T> {
   data: T;
 }
 
+/** A paginated collection also carries Laravel's `meta` block. */
+export interface Paginated<T> {
+  data: T[];
+  meta: { current_page: number; last_page: number; per_page: number; total: number };
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const token = options.token !== undefined ? options.token : await getSessionToken();
   const query = options.query ? `?${new URLSearchParams(options.query)}` : "";

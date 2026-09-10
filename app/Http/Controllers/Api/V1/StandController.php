@@ -16,10 +16,14 @@ class StandController extends Controller
      * deliberately returns the whole filtered set rather than a page of it.
      * Callers that only need part of the plan should narrow it with the
      * proximity or status filters.
+     *
+     * Scoped to the caller's branch: an agent never sees another office's stock.
      */
     public function index(IndexStandRequest $request): AnonymousResourceCollection
     {
-        $stands = Stand::query()->orderBy('stand_number');
+        $stands = Stand::query()
+            ->forBranch($request->user()->branch)
+            ->orderBy('stand_number');
 
         if ($status = $request->enum('status', StandStatus::class)) {
             $stands->status($status);

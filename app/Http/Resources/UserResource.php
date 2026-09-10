@@ -20,6 +20,8 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            /** The office the user works from; every list and report is scoped to it. */
+            'branch' => $this->branch ? new BranchResource($this->branch) : null,
         ];
     }
 }

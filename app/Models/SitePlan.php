@@ -6,6 +6,7 @@ use Database\Factories\SitePlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read array<int, array{x: float, y: float}> $boundary
  */
 #[Fillable([
+    'branch_id',
+    'slug',
     'name',
     'subtitle',
     'authority',
@@ -30,6 +33,14 @@ class SitePlan extends Model
 {
     /** @use HasFactory<SitePlanFactory> */
     use HasFactory;
+
+    /**
+     * @return BelongsTo<Branch, $this>
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     /**
      * @return HasMany<Stand, $this>

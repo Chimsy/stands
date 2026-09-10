@@ -199,23 +199,62 @@ composer setup                      # install, key, migrate --seed
 cd front-end && cp .env.example .env.local && npm run dev
 ```
 
-Seeded sign-in: `test@example.com` / `password`. Every page and every endpoint
-except `POST /api/v1/login` requires a token.
+Every page and every endpoint except `POST /api/v1/login` requires a token, and
+everything a user sees is scoped to their branch.
 
 - Backend tests: `php artisan test --compact`. Format with `vendor/bin/pint --dirty --format agent`.
 - Front-end: `npm run build` and `npx eslint` from `front-end/`.
 - Never run `npm` from the repository root; it has no package manifest.
 
+## Selling, receipting and the books
+
+Selling a stand and taking money for it are recorded as double-entry
+bookkeeping, so the financial statements are derived from the ledger rather
+than assembled from summaries.
+
+- **Post through the action, never the tables.** `App\Actions\PostJournalEntry`
+  is the only writer of `journal_entries` / `journal_lines`, and it refuses an
+  entry whose debits and credits disagree. Entries are append-only; a mistake is
+  corrected with a reversing entry.
+- **Revenue is recognised at signing**, not on collection. `SellStand` takes the
+  whole price to revenue, carries the unpaid part as a receivable, and charges
+  the stand's cost out of Land Inventory the same day. `RecordPayment` only
+  moves receivable to bank.
+- **Money is integer minor units** (`*_cents`) everywhere behind the API.
+  Resources divide by 100 at the edge; nothing else does.
+- **Statements are live.** `App\Reports\*` read the journal on every request.
+  There is no period close, and retained earnings is derived rather than posted.
+
+## One ledger, many branches
+
+A branch owns its townships, staff, buyers, and every sale, receipt and journal
+entry raised there. That single dimension is what lets the same ledger answer
+both "how did Bulawayo do" and "how did the group do".
+
+Everything operational is scoped to the signed-in user's branch, and a record
+belonging to another branch reads as **404, not 403** - a 403 would confirm the
+reference exists. Statements are the one place a caller may cross the boundary,
+and only to consolidate the whole group.
+
+Seeded sign-ins: `test@example.com` (Harare) and `bulawayo@example.com`
+(Bulawayo), both with the password `password`.
+
 ## Where the data lives
 
-The site map's sample township is **fixture input, not runtime data**. It lives
-in `database/data/*.json`, is imported by `database/seeders/SitePlanSeeder.php`,
-and is regenerated deterministically by `cd front-end && npm run generate:plan`
-(re-seed afterwards). `front-end/` holds no data files of its own.
+The sample townships are **fixture input, not runtime data**. Each lives in
+`database/data/<slug>/`, is imported by `database/seeders/SitePlanSeeder.php`
+against its branch, and is regenerated deterministically by
+`cd front-end && npm run generate:plan` (re-seed afterwards). `front-end/` holds
+no data files of its own.
+
+`TradingHistorySeeder` then sells the stands the fixture marks as sold or in
+progress, through the same actions the API uses, so the seeded books are
+produced the way a real one would be. Seeding takes about ten seconds.
 
 ## Read before editing
 
-`.ai/rules/` holds the settled decisions and the traps - the API contract, the
-front-end's server-side-only API access, the Next 16 `proxy.ts` rename, and a
-SQLite `whereRaw` binding trap that silently returns wrong rows. Start at
-`.ai/rules/index.md` and read every file whose globs match what you are touching.
+`.ai/rules/` holds the settled decisions and the traps - the posting rules, the
+branch scoping contract, the API shape, the front-end's server-side-only API
+access, the Next 16 `proxy.ts` rename, and a SQLite `whereRaw` binding trap that
+silently returns wrong rows. Start at `.ai/rules/index.md` and read every file
+whose globs match what you are touching.

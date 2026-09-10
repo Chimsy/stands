@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\StandStatus;
+use App\Models\Concerns\ScopedToUserBranch;
 use Database\Factories\StandFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A single surveyed stand on a site plan.
@@ -25,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'road',
     'area_sqm',
     'price_cents',
+    'cost_cents',
     'centroid_x',
     'centroid_y',
     'points',
@@ -32,7 +35,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Stand extends Model
 {
     /** @use HasFactory<StandFactory> */
-    use HasFactory;
+    use HasFactory, ScopedToUserBranch;
 
     /**
      * Stand numbers, not database keys, are what buyers and agents quote, so
@@ -52,6 +55,17 @@ class Stand extends Model
     }
 
     /**
+     * A stand is sold at most once, which the unique key on sales.stand_id
+     * enforces.
+     *
+     * @return HasOne<Sale, $this>
+     */
+    public function sale(): HasOne
+    {
+        return $this->hasOne(Sale::class);
+    }
+
+    /**
      * The asking (or sold) price in major currency units, derived from the
      * exact minor-unit value held in the database.
      *
@@ -60,6 +74,27 @@ class Stand extends Model
     protected function price(): Attribute
     {
         return Attribute::get(fn (): float => $this->price_cents / 100);
+    }
+
+    /**
+     * Stands belonging to a branch's townships. Every stand query a signed-in
+     * user makes goes through this, so one branch never sees another's stock.
+     */
+    #[Scope]
+    protected function forBranch(Builder $query, ?Branch $branch): Builder
+    {
+        return $query->when(
+            $branch,
+            fn (Builder $query) => $query->whereHas('sitePlan', fn (Builder $plans) => $plans->whereBelongsTo($branch)),
+            // A user with no branch is deliberately shown nothing at all.
+            fn (Builder $query) => $query->whereRaw('1 = 0'),
+        );
+    }
+
+    #[Scope]
+    protected function available(Builder $query): Builder
+    {
+        return $query->where('status', StandStatus::Available);
     }
 
     #[Scope]
@@ -72,6 +107,16 @@ class Stand extends Model
      * Matches the stand number, road or block, mirroring the search box on the
      * site map so the client and the API agree on what a "match" means.
      */
+    /**
+     * What the stand is carried at in land inventory, in major currency units.
+     *
+     * @return Attribute<float, never>
+     */
+    protected function cost(): Attribute
+    {
+        return Attribute::get(fn (): float => $this->cost_cents / 100);
+    }
+
     #[Scope]
     protected function matching(Builder $query, string $term): Builder
     {
@@ -118,6 +163,7 @@ class Stand extends Model
             'status' => StandStatus::class,
             'area_sqm' => 'integer',
             'price_cents' => 'integer',
+            'cost_cents' => 'integer',
             'centroid_x' => 'float',
             'centroid_y' => 'float',
             'points' => 'array',

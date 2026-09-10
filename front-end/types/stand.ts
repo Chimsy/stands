@@ -64,4 +64,6 @@ export interface AuthenticatedUser {
   id: number;
   name: string;
   email: string;
+  /** Null only for an account that has not been assigned an office yet. */
+  branch: { code: string; name: string; city: string } | null;
 }

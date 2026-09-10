@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Branch;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +46,13 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * A signed-in agent belonging to `$branch`.
+ *
+ * Almost every endpoint is scoped to the caller's branch, so a test that skips
+ * this ends up asserting against an agent who can see nothing.
+ */
+function agentAt(Branch $branch): User
 {
-    // ..
+    return User::factory()->create(['branch_id' => $branch->id]);
 }

@@ -1,19 +1,24 @@
 <?php
 
+use App\Models\Branch;
 use App\Models\SitePlan;
-use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
+beforeEach(function () {
+    $this->branch = Branch::factory()->create();
+    $this->agent = agentAt($this->branch);
+});
+
 it('returns 401 without a token', function () {
-    SitePlan::factory()->create();
+    SitePlan::factory()->for($this->branch)->create();
 
     $this->getJson(route('api.v1.site-plan.show'))->assertUnauthorized();
 });
 
 it('returns the plan in the shape the site map expects', function () {
-    Sanctum::actingAs(User::factory()->create());
+    Sanctum::actingAs($this->agent);
 
-    SitePlan::factory()->create([
+    SitePlan::factory()->for($this->branch)->create([
         'name' => 'Riverstone Park Estate',
         'subtitle' => 'Proposed medium density residential township',
         'authority' => 'City of Harare',
@@ -38,7 +43,7 @@ it('returns the plan in the shape the site map expects', function () {
 });
 
 it('returns 404 when no plan has been seeded', function () {
-    Sanctum::actingAs(User::factory()->create());
+    Sanctum::actingAs($this->agent);
 
     $this->getJson(route('api.v1.site-plan.show'))->assertNotFound();
 });

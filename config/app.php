@@ -65,7 +65,12 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    /**
+     * The business trades in Zimbabwe, so dates must turn over at local
+     * midnight. Left on UTC, an agent receipting a sale before 2am would be
+     * told the date is in the future.
+     */
+    'timezone' => env('APP_TIMEZONE', 'Africa/Harare'),
 
     /*
     |--------------------------------------------------------------------------

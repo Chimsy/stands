@@ -2,10 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { RegisterBuyerForm } from "@/components/register-buyer-form";
+import { SellStandForm } from "@/components/sell-stand-form";
 import { StandLocator } from "@/components/site-map/stand-locator";
 import { StatusBadge } from "@/components/status-badge";
 import { formatPrice } from "@/lib/format";
 import { getSitePlan, getStandByNumber, getStandsNear } from "@/lib/stands";
+import { getBuyers, getSales } from "@/lib/trading";
+import { businessToday } from "@/lib/business-date";
 
 const LOCATOR_RADIUS = 110;
 
@@ -25,6 +29,13 @@ export default async function StandProfilePage(props: PageProps<"/stands/[standN
   }
 
   const neighbours = await getStandsNear(stand.centroid, LOCATOR_RADIUS);
+  const isAvailable = stand.status === "available";
+
+  /** An unavailable stand has a sale behind it; find it so the page can link there. */
+  const [buyers, existingSale] = await Promise.all([
+    isAvailable ? getBuyers() : Promise.resolve([]),
+    isAvailable ? Promise.resolve(undefined) : findSaleForStand(stand.standNumber),
+  ]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-4 sm:p-8">
@@ -51,6 +62,33 @@ export default async function StandProfilePage(props: PageProps<"/stands/[standN
         </dl>
       </div>
 
+      {isAvailable ? (
+        <section className="flex flex-col gap-4 rounded-xl border border-black/[.08] bg-white p-6 dark:border-white/[.145] dark:bg-zinc-950">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Sell this stand</h2>
+            <RegisterBuyerForm />
+          </div>
+
+          <SellStandForm standNumber={stand.standNumber} listPrice={stand.price} buyers={buyers} today={businessToday()} />
+        </section>
+      ) : (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/[.08] bg-white p-6 text-sm dark:border-white/[.145] dark:bg-zinc-950">
+          <p className="text-zinc-500 dark:text-zinc-400">
+            {existingSale
+              ? `Sold on ${existingSale.saleDate}. ${formatPrice(existingSale.outstanding)} still owing.`
+              : "This stand is not available."}
+          </p>
+          {existingSale && (
+            <Link
+              href={`/sales/${existingSale.reference}`}
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Open sale {existingSale.reference}
+            </Link>
+          )}
+        </section>
+      )}
+
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Location on the approved plan</h2>
         <StandLocator plan={plan} stand={stand} neighbours={neighbours} radius={LOCATOR_RADIUS} />
@@ -66,4 +104,10 @@ function Field({ label, value }: { label: string; value: string }) {
       <dd className="font-medium text-zinc-900 dark:text-zinc-50">{value}</dd>
     </div>
   );
+}
+
+async function findSaleForStand(standNumber: string) {
+  const { data } = await getSales({ standNumber });
+
+  return data[0];
 }

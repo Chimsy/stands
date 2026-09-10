@@ -7,7 +7,7 @@
     "build": "node scripts/run-next.mjs build",
     "start": "node scripts/run-next.mjs start",
     "lint": "eslint",
-    "generate:plan": "node scripts/generate-site-plan.mjs"
+    "generate:plan": "node scripts/generate-townships.mjs"
   },
   "dependencies": {
     "next": "16.3.4",

@@ -65,3 +65,19 @@ body {
 .map-stands[data-filter="in-progress"] > polygon:not([data-status="in-progress"]) {
   opacity: 0.12;
 }
+
+/*
+ * A receipt is a document the buyer keeps, so printing it drops the app's
+ * chrome and forces light ink on white regardless of the viewer's theme.
+ */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  @page {
+    margin: 16mm;
+  }
+}

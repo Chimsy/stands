@@ -17,8 +17,18 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "database", "data");
-const SEED = 20260907;
+/**
+ * Configuration comes from the environment so `generate-townships.mjs` can run
+ * this once per township. The defaults reproduce the original Riverstone Park
+ * fixture exactly.
+ */
+const env = (key, fallback) => process.env[key] ?? fallback;
+const envInt = (key, fallback) => Number(env(key, fallback));
+const envList = (key, fallback) => (process.env[key] ? JSON.parse(process.env[key]) : fallback);
+
+const SLUG = env("PLAN_SLUG", "riverstone-park");
+const DATA_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "database", "data", SLUG);
+const SEED = envInt("PLAN_SEED", 20260907);
 
 // --- layout constants (metres) ---------------------------------------------
 const PRECINCT = 238; // side of a residential superblock
@@ -28,11 +38,14 @@ const MINOR = 10; // internal access road
 const DEPTH = 26; // stand depth
 const BAND = DEPTH * 2; // two rows of stands back to back
 const FRONTAGE = 14; // nominal stand frontage
+// Not configurable: the estate boundary and the AMENITIES keys below are
+// authored against a 4x3 grid, so changing these would place superblocks
+// outside the boundary.
 const COLS = 4;
 const ROWS = 3;
 const ORIGIN = { x: 40, y: 40 };
 const PITCH = PRECINCT + COLLECTOR;
-const NORTH_ROTATION = 5; // degrees the grid is rotated off true north
+const NORTH_ROTATION = envInt("PLAN_ROTATION", 5); // degrees the grid is rotated off true north
 
 // --- deterministic randomness ----------------------------------------------
 function mulberry32(seed) {
@@ -145,15 +158,15 @@ const BOUNDARY = convexHull([
 ]);
 
 // --- road network -----------------------------------------------------------
-const ARTERIAL_NAMES = ["Chiremba Drive", "Twentydales Road", "Nyanga Drive", "Mazowe Drive"];
-const COLLECTOR_NAMES = [
+const ARTERIAL_NAMES = envList("PLAN_ARTERIAL_NAMES", ["Chiremba Drive", "Twentydales Road", "Nyanga Drive", "Mazowe Drive"]);
+const COLLECTOR_NAMES = envList("PLAN_COLLECTOR_NAMES", [
   "Msasa Road",
   "Mukuyu Road",
   "Muhacha Road",
   "Mubvamaropa Road",
   "Muonde Road",
-];
-const MINOR_NAMES = [
+]);
+const MINOR_NAMES = envList("PLAN_MINOR_NAMES", [
   "Jacaranda Close",
   "Flamboyant Way",
   "Munhondo Close",
@@ -186,7 +199,7 @@ const MINOR_NAMES = [
   "Mubayamhondoro Close",
   "Mutswiri Way",
   "Mudonda Close",
-];
+]);
 
 const GRID = {
   left: ORIGIN.x,
@@ -258,7 +271,7 @@ const zones = [];
 const blocks = [];
 const stands = [];
 
-let standNumber = 2001;
+let standNumber = envInt("PLAN_FIRST_STAND", 2001);
 let blockIndex = 0;
 
 /** Splits a run of `length` metres into stand frontages that sum exactly. */
@@ -492,9 +505,9 @@ function normalisePoint(p) {
 }
 
 const sitePlan = {
-  name: "Riverstone Park Estate",
-  subtitle: "Proposed medium density residential township",
-  authority: "City of Harare",
+  name: env("PLAN_NAME", "Riverstone Park Estate"),
+  subtitle: env("PLAN_SUBTITLE", "Proposed medium density residential township"),
+  authority: env("PLAN_AUTHORITY", "City of Harare"),
   note: "Sample layout for demonstration - not a survey document",
   northRotation: NORTH_ROTATION,
   bounds: { width: round(maxX - minX), height: round(maxY - minY) },
@@ -523,6 +536,7 @@ writeFileSync(resolve(DATA_DIR, "stands.json"), JSON.stringify(standsOut));
 
 const counts = standsOut.reduce((acc, stand) => ({ ...acc, [stand.status]: (acc[stand.status] ?? 0) + 1 }), {});
 const totalArea = standsOut.reduce((sum, stand) => sum + stand.areaSqm, 0);
+console.log(`\n${sitePlan.name}  ->  database/data/${SLUG}/`);
 console.log(`stands:     ${standsOut.length}`);
 console.log(`statuses:   ${JSON.stringify(counts)}`);
 console.log(`blocks:     ${sitePlan.blocks.length}, roads: ${sitePlan.roads.length}, zones: ${sitePlan.zones.length}`);

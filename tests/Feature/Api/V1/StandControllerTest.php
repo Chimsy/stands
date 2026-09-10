@@ -1,13 +1,15 @@
 <?php
 
 use App\Enums\StandStatus;
+use App\Models\Branch;
 use App\Models\SitePlan;
 use App\Models\Stand;
-use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
-    $this->plan = SitePlan::factory()->create();
+    $this->branch = Branch::factory()->create();
+    $this->plan = SitePlan::factory()->for($this->branch)->create();
+    $this->agent = agentAt($this->branch);
 });
 
 describe('index', function () {
@@ -18,7 +20,7 @@ describe('index', function () {
     });
 
     it('returns every stand on the plan', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->count(3)->create();
 
         $this->getJson(route('api.v1.stands.index'))
@@ -27,7 +29,7 @@ describe('index', function () {
     });
 
     it('exposes stand geometry and pricing in the shape the site map expects', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
 
         Stand::factory()->for($this->plan)->at(131.1, 52.8)->create([
             'stand_number' => '2001',
@@ -52,7 +54,7 @@ describe('index', function () {
     });
 
     it('filters by status', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->status(StandStatus::Sold)->create(['stand_number' => '1']);
         Stand::factory()->for($this->plan)->status(StandStatus::Available)->create(['stand_number' => '2']);
 
@@ -63,7 +65,7 @@ describe('index', function () {
     });
 
     it('filters by block and road', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->create(['stand_number' => '1', 'block' => 'Block A', 'road' => 'Chiremba Drive']);
         Stand::factory()->for($this->plan)->create(['stand_number' => '2', 'block' => 'Block B', 'road' => 'Chiremba Drive']);
         Stand::factory()->for($this->plan)->create(['stand_number' => '3', 'block' => 'Block A', 'road' => 'Mutare Road']);
@@ -75,7 +77,7 @@ describe('index', function () {
     });
 
     it('searches stand number, road and block', function (string $term) {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->create(['stand_number' => '2001', 'block' => 'Block A', 'road' => 'Chiremba Drive']);
         Stand::factory()->for($this->plan)->create(['stand_number' => '9999', 'block' => 'Block Z', 'road' => 'Mutare Road']);
 
@@ -86,7 +88,7 @@ describe('index', function () {
     })->with(['200', 'Chiremba', 'Block A']);
 
     it('treats wildcard characters in a search as literal text', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->create(['stand_number' => '2001', 'road' => 'Chiremba Drive', 'block' => 'Block A']);
 
         $this->getJson(route('api.v1.stands.index', ['search' => '%']))
@@ -95,7 +97,7 @@ describe('index', function () {
     });
 
     it('returns only stands within the given radius of a point', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->at(500.0, 500.0)->create(['stand_number' => 'centre']);
         Stand::factory()->for($this->plan)->at(560.0, 500.0)->create(['stand_number' => 'inside']);
         Stand::factory()->for($this->plan)->at(600.0, 600.0)->create(['stand_number' => 'corner-of-box']);
@@ -109,7 +111,7 @@ describe('index', function () {
     });
 
     it('returns 422 for an unknown status', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
 
         $this->getJson(route('api.v1.stands.index', ['status' => 'reserved']))
             ->assertUnprocessable()
@@ -117,7 +119,7 @@ describe('index', function () {
     });
 
     it('returns 422 when a proximity search is missing a coordinate', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
 
         $this->getJson(route('api.v1.stands.index', ['x' => 500, 'radius' => 110]))
             ->assertUnprocessable()
@@ -133,7 +135,7 @@ describe('show', function () {
     });
 
     it('resolves a stand by its stand number', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
         Stand::factory()->for($this->plan)->create(['stand_number' => '2001']);
 
         $this->getJson(route('api.v1.stands.show', '2001'))
@@ -142,7 +144,7 @@ describe('show', function () {
     });
 
     it('returns 404 for an unknown stand number', function () {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->agent);
 
         $this->getJson(route('api.v1.stands.show', '404404'))->assertNotFound();
     });

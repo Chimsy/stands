@@ -4,7 +4,8 @@ Before planning or editing, find the row whose globs match the file's path and r
 
 | Applies to | Rule file |
 | --- | --- |
+| app/{Actions,Reports}/** | .ai/rules/actions-reports.md |
+| {routes,bootstrap,config}/** | .ai/rules/architecture.md |
 | front-end/** | .ai/rules/front-end.md |
 | app/Http/** | .ai/rules/http.md |
 | app/Models/** | .ai/rules/models.md |
-| {routes,bootstrap,config}/** | .ai/rules/architecture.md |
