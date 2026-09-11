@@ -17,7 +17,7 @@ One database holds every branch. A branch owns its townships, its staff, its buy
 
 - `Stand`, `Sale` and `Payment` use the `ScopedToUserBranch` trait, so route binding resolves only within the signed-in user's branch and another branch's record reads as 404 rather than 403. A 403 would confirm the reference exists.
 - Every list query goes through the model's `forBranch` scope. `Stand::forBranch(null)` deliberately returns nothing: a user without a branch sees no stock at all, rather than everything.
-- Statements are the one place a caller may cross the boundary: `StatementRequest::branch()` accepts `group` to consolidate, the caller's own code, and - for an administrator - any branch code. Anything else aborts 403.
+- Statements do not widen the boundary for an agent: `StatementRequest::branch()` gives them their own branch and refuses everything else, the consolidated `group` included. Only an administrator may name another branch code or ask for `group`. Anything else aborts 403.
 - Stand numbers are unique system-wide, not per township. `front-end/scripts/generate-townships.mjs` keeps each estate's numbering range apart, and the unique index enforces it.
 - Document numbers (`SALE-`, `RCP-`, `JE-`) are sequential per branch via `App\Support\DocumentNumber`, allocated inside the writing transaction; the unique index on each column is the real guard against a race.
 

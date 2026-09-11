@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ApiError, apiRequest, type Envelope, type Paginated } from "@/lib/api";
-import type { Branch, Buyer, Payment, Receipt, Sale } from "@/types/trading";
+import type { Buyer, Payment, Receipt, Sale } from "@/types/trading";
 
 /**
  * Reads for sales, receipts and buyers. Writes live in the server actions
@@ -53,10 +53,5 @@ export async function getReceipt(receiptNumber: string): Promise<Receipt | undef
 
 export async function getBuyers(search = ""): Promise<Buyer[]> {
   const { data } = await read<Envelope<Buyer[]>>("/buyers", search ? { search } : undefined);
-  return data;
-}
-
-export async function getBranches(): Promise<Branch[]> {
-  const { data } = await read<Envelope<Branch[]>>("/branches");
   return data;
 }

@@ -66,7 +66,7 @@ All three use the password `#p@$$123!`.
 - **Site map** — every stand in the branch's township, drawn from the plan, searchable and filterable.
 - **Selling** — cash or a deposit-and-instalments payment plan, against a registered buyer.
 - **Receipting** — every payment issues a numbered receipt, printable and saveable as a PDF from the browser.
-- **Statements** — income statement, balance sheet, trial balance and receivables ageing, for the branch or consolidated across the group, read live from the ledger.
+- **Statements** — income statement, balance sheet, trial balance and receivables ageing, read live from the ledger. An agent sees their own branch; an administrator sees the consolidated group and each branch on its own.
 - **Dashboard** — head-office only: signings against collections by month, branch performance, stock take-up, sale mix and leading agents, for one branch or the whole group.
 
 ## The accounting
@@ -105,17 +105,18 @@ token, so unauthenticated requests get `401` rather than a redirect. Operational
 routes are scoped to the branch the request is worked from, and another branch's
 record returns `404` rather than `403`.
 
-A sales agent is fixed to their own branch. An administrator names the office
-they are working from in an `X-Branch` header, and every list, document and
-statement in that request answers for it; naming a branch they are not entitled
-to is a `403`.
+A sales agent is fixed to their own branch, statements included - another
+branch's books and the consolidated group are both a `403`. An administrator
+names the office they are working from in an `X-Branch` header, and every list,
+document and statement in that request answers for it; they alone may read
+another branch's books, the group, and the dashboard.
 
 | Method | Route | |
 | --- | --- | --- |
 | `POST` | `/api/v1/login` | Exchanges credentials for a token. Throttled to 5/min per account and address. |
 | `POST` | `/api/v1/logout` | Revokes the calling token only. |
 | `GET` | `/api/v1/user` | The account behind the current token, and its branch. |
-| `GET` | `/api/v1/branches` | Every branch, for the consolidated statements view. |
+| `GET` | `/api/v1/branches` | Every branch. |
 | `GET` | `/api/v1/site-plan` | Boundary, roads, zones and block labels for the caller's township. |
 | `GET` | `/api/v1/stands` | Every stand. Filter with `status`, `block`, `road`, `search`, or `x`+`y`+`radius`. |
 | `GET` | `/api/v1/stands/{standNumber}` | One stand, e.g. `/api/v1/stands/2001`. |
@@ -125,7 +126,7 @@ to is a `403`.
 | `POST` | `/api/v1/sales/{reference}/payments` | Receipt a payment; returns the receipt. |
 | `GET` | `/api/v1/receipts` | Receipts issued at the branch. |
 | `GET` | `/api/v1/receipts/{receiptNumber}` | One printable receipt. |
-| `GET` | `/api/v1/reports/trial-balance` | `branch=<code>` or `branch=group`; `to` sets the cut-off. |
+| `GET` | `/api/v1/reports/trial-balance` | `branch=<code>`, or `branch=group` for administrators; `to` sets the cut-off. |
 | `GET` | `/api/v1/reports/income-statement` | Also takes `from`; defaults to the year to date. |
 | `GET` | `/api/v1/reports/balance-sheet` | |
 | `GET` | `/api/v1/reports/receivables-ageing` | Outstanding instalments, bucketed by how late they are. |

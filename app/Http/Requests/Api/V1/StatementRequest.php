@@ -29,9 +29,12 @@ class StatementRequest extends FormRequest
     }
 
     /**
-     * Null means consolidated. An agent may read only their own branch or the
-     * group; an administrator may name any office, because reading the group
-     * total already tells them what each branch contributes.
+     * Which books to read. Null means every branch consolidated.
+     *
+     * An agent reads their own branch and nothing else - not another office,
+     * and not the group, because a consolidated total is a head-office figure
+     * that a single branch has no business seeing. An administrator may name
+     * any office or ask for the group.
      */
     public function branch(): ?Branch
     {
@@ -42,6 +45,12 @@ class StatementRequest extends FormRequest
         }
 
         if (strtolower($requested) === self::GROUP) {
+            abort_unless(
+                $this->user()->isAdmin(),
+                403,
+                'Consolidated statements are for administrators only.',
+            );
+
             return null;
         }
 
@@ -50,7 +59,7 @@ class StatementRequest extends FormRequest
         abort_unless(
             $branch !== null && $this->user()->canWorkFrom($branch),
             403,
-            'You can only read your own branch, or the consolidated group.',
+            'You can only read your own branch\'s books.',
         );
 
         return $branch;

@@ -51,8 +51,8 @@ it('defaults to the caller\'s own branch', function () {
         ->assertJsonPath('data.inBalance', true);
 });
 
-it('consolidates every branch when asked for the group', function () {
-    Sanctum::actingAs($this->agent);
+it('consolidates every branch for an administrator', function () {
+    Sanctum::actingAs(adminAt($this->harare));
 
     $this->getJson(route('api.v1.reports.balance-sheet', ['branch' => 'group']))
         ->assertOk()
@@ -61,12 +61,29 @@ it('consolidates every branch when asked for the group', function () {
         ->assertJsonPath('data.inBalance', true);
 });
 
+/**
+ * A consolidated total is a head-office figure. An agent who could ask for it
+ * would learn what every other branch turns over without ever naming one.
+ */
+it('refuses the consolidated group to an agent', function (string $route) {
+    Sanctum::actingAs($this->agent);
+
+    $this->getJson(route($route, ['branch' => 'group']))
+        ->assertForbidden()
+        ->assertJsonPath('message', 'Consolidated statements are for administrators only.');
+})->with([
+    'api.v1.reports.trial-balance',
+    'api.v1.reports.income-statement',
+    'api.v1.reports.balance-sheet',
+    'api.v1.reports.receivables-ageing',
+]);
+
 it('refuses to show another branch\'s books', function (string $route) {
     Sanctum::actingAs($this->agent);
 
     $this->getJson(route($route, ['branch' => 'BYO']))
         ->assertForbidden()
-        ->assertJsonPath('message', 'You can only read your own branch, or the consolidated group.');
+        ->assertJsonPath('message', 'You can only read your own branch\'s books.');
 })->with([
     'api.v1.reports.trial-balance',
     'api.v1.reports.balance-sheet',

@@ -4,8 +4,10 @@ import type { Metadata } from "next";
 import { formatCents, formatDate } from "@/lib/format";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { getBalanceSheet, getIncomeStatement, getReceivablesAgeing, getTrialBalance, type StatementScope } from "@/lib/reports";
-import { getBranches } from "@/lib/trading";
 import { AGEING_BUCKET_LABEL, type AgeingBucket, type StatementLine } from "@/types/reports";
+
+/** Value of the `branch` parameter that asks for every branch consolidated. */
+const GROUP = "group";
 
 export const metadata: Metadata = { title: "Financial statements" };
 
@@ -22,18 +24,22 @@ export default async function StatementsPage(props: PageProps<"/statements">) {
    * All four are read in the same request, so every panel on the page reports
    * the same instant. They are independent queries, so they run together.
    */
-  const [branches, trialBalance, incomeStatement, balanceSheet, ageing] = await Promise.all([
-    getBranches(),
+  const [trialBalance, incomeStatement, balanceSheet, ageing] = await Promise.all([
     getTrialBalance(scope),
     getIncomeStatement(scope),
     getBalanceSheet(scope),
     getReceivablesAgeing(scope),
   ]);
 
-  const ownCode = user?.branch?.code;
+  /**
+   * The offices this account may read, taken from the signed-in user rather
+   * than the branch list: it is the same authority the API scopes by, so the
+   * page can never offer a branch the books would then refuse.
+   */
+  const branches = user?.branches ?? [];
   const isGroup = trialBalance.branch === null;
   const scopeLabel = isGroup
-    ? "All branches consolidated"
+    ? `All ${branches.length} branches consolidated`
     : (branches.find((option) => option.code === trialBalance.branch)?.name ?? trialBalance.branch);
 
   return (
@@ -46,16 +52,23 @@ export default async function StatementsPage(props: PageProps<"/statements">) {
           </p>
         </div>
 
-        <nav className="flex items-center gap-1.5">
-          {ownCode && (
-            <ScopeLink href={buildHref(ownCode, to)} active={!isGroup}>
-              My branch
+        {/* An agent has one set of books and no choice to offer, so the tabs are head office's. */}
+        {user?.isAdmin && (
+          <nav className="flex flex-wrap items-center gap-1.5">
+            <ScopeLink href={buildHref(GROUP, to)} active={isGroup}>
+              Group
             </ScopeLink>
-          )}
-          <ScopeLink href={buildHref("group", to)} active={isGroup}>
-            Group ({branches.length} branches)
-          </ScopeLink>
-        </nav>
+            {branches.map((option) => (
+              <ScopeLink
+                key={option.code}
+                href={buildHref(option.code, to)}
+                active={!isGroup && trialBalance.branch === option.code}
+              >
+                {option.name}
+              </ScopeLink>
+            ))}
+          </nav>
+        )}
       </header>
 
       <BalanceWarning

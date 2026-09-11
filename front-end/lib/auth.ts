@@ -7,6 +7,19 @@ interface LoginResponse {
   user: AuthenticatedUser;
 }
 
+/** Where a visitor lands when they sign in without having asked for somewhere in particular. */
+export const DEFAULT_LANDING_PATH = "/";
+
+/**
+ * The page this account opens on.
+ *
+ * An administrator's job starts with how the branches are selling, so they land
+ * on the dashboard; an agent works a single township and lands on its map.
+ */
+export function landingPathFor(user: AuthenticatedUser): string {
+  return user.isAdmin ? "/dashboard" : DEFAULT_LANDING_PATH;
+}
+
 export async function requestToken(email: string, password: string, deviceName: string): Promise<LoginResponse> {
   return apiRequest<LoginResponse>("/login", {
     method: "POST",

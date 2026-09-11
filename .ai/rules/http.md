@@ -17,6 +17,6 @@ The Next.js app in `front-end/` is the only consumer, so the API is the contract
 ## X-Branch selects the office; admin-only routes use the admin alias
 Every authenticated route sits behind the `branch` middleware. The caller names the office in the `X-Branch` header (a branch code); an agent may only name their own, an administrator any. A code that does not exist or is not permitted is a 403 rather than being ignored, because silently answering for a different branch than the caller believes they are in would misfile a sale.
 
-`StatementRequest::branch()` is the one place that crosses branches: `group` consolidates, and an administrator may also name any single branch. It is shared by the statements and `GET /v1/dashboard`, so the books and the sales floor read the same scope and dates.
+`StatementRequest::branch()` decides whose books a caller reads. An agent gets their own branch only - naming another, or asking for the consolidated `group`, is a 403. An administrator may name any branch or `group`. It is shared by the statements and `GET /v1/dashboard`, so the books and the sales floor read the same scope and dates.
 
 Head-office-only routes add the `admin` alias (`EnsureUserIsAdmin`) and answer 403 - unlike a cross-branch record, the existence of the endpoint is not worth hiding.

@@ -241,14 +241,18 @@ both "how did Bulawayo do" and "how did the group do".
 
 Everything operational is scoped to the branch the request is **worked from**,
 and a record belonging to another branch reads as **404, not 403** - a 403 would
-confirm the reference exists. Statements are the one place a caller may cross
-the boundary, and only to consolidate the whole group.
+confirm the reference exists.
 
-There are two levels of account. A **sales** agent is fixed to the branch they
-belong to. An **admin** may work from any branch: the front-end holds the choice
-in a cookie and sends it as `X-Branch`, `ResolveActiveBranch` settles it before
-anything queries, and `/api/v1/dashboard` reports the sales floor for one branch
-or the whole group.
+There are two levels of account, and the boundary is the same for both the
+books and the stock:
+
+- A **sales** agent is fixed to the branch they belong to. They read their own
+  branch's statements and nothing else - not another office, and **not the
+  consolidated group**, which is a head-office figure.
+- An **admin** may work from any branch: the front-end holds the choice in a
+  cookie and sends it as `X-Branch`, and `ResolveActiveBranch` settles it before
+  anything queries. They read any single branch's statements *and* the group,
+  and `/api/v1/dashboard` is theirs alone.
 
 Seeded sign-ins, all with the password `#p@$$123!`:
 
