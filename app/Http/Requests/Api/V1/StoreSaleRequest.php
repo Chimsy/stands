@@ -24,7 +24,7 @@ class StoreSaleRequest extends FormRequest
             'buyerId' => [
                 'required',
                 /** Restricted to the caller's own branch, so a sale cannot be booked against another office's buyer. */
-                Rule::exists('buyers', 'id')->where('branch_id', $this->user()->branch_id),
+                Rule::exists('buyers', 'id')->where('branch_id', $this->user()->activeBranch()?->id),
             ],
             'type' => ['required', Rule::enum(SaleType::class)],
             'price' => ['required', 'numeric', 'min:0.01', 'max:99999999'],

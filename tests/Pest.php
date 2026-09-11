@@ -56,3 +56,14 @@ function agentAt(Branch $branch): User
 {
     return User::factory()->create(['branch_id' => $branch->id]);
 }
+
+/**
+ * A signed-in administrator whose home branch is `$branch`.
+ *
+ * They may work from any branch by sending the `X-Branch` header, so a test
+ * that omits it is asserting against their home office.
+ */
+function adminAt(Branch $branch): User
+{
+    return User::factory()->admin()->create(['branch_id' => $branch->id]);
+}

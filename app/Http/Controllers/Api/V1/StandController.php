@@ -22,7 +22,7 @@ class StandController extends Controller
     public function index(IndexStandRequest $request): AnonymousResourceCollection
     {
         $stands = Stand::query()
-            ->forBranch($request->user()->branch)
+            ->forBranch($request->user()->activeBranch())
             ->orderBy('stand_number');
 
         if ($status = $request->enum('status', StandStatus::class)) {

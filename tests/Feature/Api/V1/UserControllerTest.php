@@ -19,7 +19,10 @@ it('returns the account behind the current token, with the branch it belongs to'
             'id' => $user->id,
             'name' => 'Sales Agent',
             'email' => 'agent@example.com',
+            'role' => 'sales',
+            'isAdmin' => false,
             'branch' => ['code' => 'HRE', 'name' => 'Harare Branch', 'city' => 'Harare'],
+            'branches' => [['code' => 'HRE', 'name' => 'Harare Branch', 'city' => 'Harare']],
         ]]);
 });
 

@@ -8,6 +8,7 @@ use App\Actions\SellStand;
 use App\Enums\PaymentMethod;
 use App\Enums\SaleType;
 use App\Enums\StandStatus;
+use App\Enums\UserRole;
 use App\Models\Account;
 use App\Models\Branch;
 use App\Models\Buyer;
@@ -99,7 +100,11 @@ class TradingHistorySeeder extends Seeder
      */
     private function trade(Branch $branch, Collection $buyers): void
     {
-        $agent = User::query()->where('branch_id', $branch->id)->first();
+        /** Attributed to an agent, never to an administrator: the sales floor booked these. */
+        $agent = User::query()
+            ->where('branch_id', $branch->id)
+            ->where('role', UserRole::Sales)
+            ->first();
 
         $traded = Stand::query()
             ->forBranch($branch)

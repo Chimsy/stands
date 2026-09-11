@@ -17,7 +17,7 @@ class SitePlanController extends Controller
     public function show(Request $request): SitePlanResource
     {
         return new SitePlanResource(
-            SitePlan::query()->where('branch_id', $request->user()->branch_id)->firstOrFail(),
+            SitePlan::query()->where('branch_id', $request->user()->activeBranch()?->id)->firstOrFail(),
         );
     }
 }

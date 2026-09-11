@@ -1,5 +1,5 @@
 import { ApiError, apiRequest, type Envelope } from "@/lib/api";
-import { getSessionToken } from "@/lib/session";
+import { clearActiveBranch, getSessionToken } from "@/lib/session";
 import type { AuthenticatedUser } from "@/types/stand";
 
 interface LoginResponse {
@@ -38,9 +38,25 @@ export async function getAuthenticatedUser(): Promise<AuthenticatedUser | null> 
     const { data } = await apiRequest<Envelope<AuthenticatedUser>>("/user");
     return data;
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (!(error instanceof ApiError)) {
+      throw error;
+    }
+
+    if (error.status === 401) {
       return null;
     }
+
+    /**
+     * The only 403 this call can draw is a branch the account may not work
+     * from - an agent signing in where an administrator left a selection
+     * behind. Dropping it recovers the session rather than wedging every page.
+     */
+    if (error.status === 403) {
+      await clearActiveBranch();
+      const { data } = await apiRequest<Envelope<AuthenticatedUser>>("/user", { branch: null });
+      return data;
+    }
+
     throw error;
   }
 }

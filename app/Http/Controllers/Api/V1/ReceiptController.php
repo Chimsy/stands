@@ -20,7 +20,7 @@ class ReceiptController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $payments = Payment::query()
-            ->forBranch($request->user()->branch)
+            ->forBranch($request->user()->activeBranch())
             ->with(['sale.stand:id,stand_number', 'sale.buyer', 'branch'])
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $term = '%'.addcslashes($request->string('search')->toString(), '%_\\').'%';

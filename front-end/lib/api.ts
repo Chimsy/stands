@@ -1,4 +1,4 @@
-import { getSessionToken } from "@/lib/session";
+import { getActiveBranch, getSessionToken } from "@/lib/session";
 
 /**
  * Base URL of the Laravel backend, including the API version prefix. The
@@ -29,6 +29,8 @@ interface ApiRequestOptions {
   query?: Record<string, string>;
   /** Pass `null` to make an unauthenticated call, or omit to use the current session. */
   token?: string | null;
+  /** Overrides the office the call answers for; omit to use the current selection. */
+  branch?: string | null;
 }
 
 /** Laravel API resources wrap their payload in a `data` key. */
@@ -44,6 +46,7 @@ export interface Paginated<T> {
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const token = options.token !== undefined ? options.token : await getSessionToken();
+  const branch = options.branch !== undefined ? options.branch : await getActiveBranch();
   const query = options.query ? `?${new URLSearchParams(options.query)}` : "";
 
   const response = await fetch(`${API_BASE_URL}${path}${query}`, {
@@ -52,6 +55,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       Accept: "application/json",
       ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      /** Settles which office every scoped query on the other side answers for. */
+      ...(branch ? { "X-Branch": branch } : {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     // Responses are token-scoped, so they are never shared across visitors.

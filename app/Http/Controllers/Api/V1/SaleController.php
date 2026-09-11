@@ -29,7 +29,7 @@ class SaleController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $sales = Sale::query()
-            ->forBranch($request->user()->branch)
+            ->forBranch($request->user()->activeBranch())
             ->with(['stand:id,stand_number', 'buyer', 'branch'])
             ->withSum('payments', 'amount_cents')
             ->when(

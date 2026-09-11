@@ -80,6 +80,25 @@ it('accepts the caller\'s own branch code', function () {
         ->assertJsonPath('data.branch', 'HRE');
 });
 
+it('lets an administrator read any branch\'s books', function () {
+    Sanctum::actingAs(adminAt($this->harare));
+
+    $this->getJson(route('api.v1.reports.balance-sheet', ['branch' => 'BYO']))
+        ->assertOk()
+        ->assertJsonPath('data.branch', 'BYO')
+        ->assertJsonPath('data.assetsCents', 900_000);
+});
+
+it('defaults an administrator to the branch they are working from', function () {
+    Sanctum::actingAs(adminAt($this->harare));
+
+    $this->withHeader('X-Branch', 'BYO')
+        ->getJson(route('api.v1.reports.balance-sheet'))
+        ->assertOk()
+        ->assertJsonPath('data.branch', 'BYO')
+        ->assertJsonPath('data.assetsCents', 900_000);
+});
+
 it('cuts the trial balance off at the requested date', function () {
     Sanctum::actingAs($this->agent);
 

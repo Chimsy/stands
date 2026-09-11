@@ -29,28 +29,31 @@ class StatementRequest extends FormRequest
     }
 
     /**
-     * Null means consolidated. Anything other than the caller's own branch code
-     * or "group" is rejected, so one office cannot read another's books.
+     * Null means consolidated. An agent may read only their own branch or the
+     * group; an administrator may name any office, because reading the group
+     * total already tells them what each branch contributes.
      */
     public function branch(): ?Branch
     {
         $requested = $this->string('branch')->toString();
 
         if ($requested === '') {
-            return $this->user()->branch;
+            return $this->user()->activeBranch();
         }
 
         if (strtolower($requested) === self::GROUP) {
             return null;
         }
 
+        $branch = Branch::query()->where('code', strtoupper($requested))->first();
+
         abort_unless(
-            strtoupper($requested) === $this->user()->branch?->code,
+            $branch !== null && $this->user()->canWorkFrom($branch),
             403,
             'You can only read your own branch, or the consolidated group.',
         );
 
-        return $this->user()->branch;
+        return $branch;
     }
 
     public function asAt(): Carbon

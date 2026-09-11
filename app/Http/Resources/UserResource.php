@@ -20,8 +20,12 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
-            /** The office the user works from; every list and report is scoped to it. */
-            'branch' => $this->branch ? new BranchResource($this->branch) : null,
+            'role' => $this->role->value,
+            'isAdmin' => $this->isAdmin(),
+            /** The office this request answered for; every list and report is scoped to it. */
+            'branch' => $this->activeBranch() ? new BranchResource($this->activeBranch()) : null,
+            /** The offices this user may switch between - one for an agent, all of them for an administrator. */
+            'branches' => BranchResource::collection($this->accessibleBranches()),
         ];
     }
 }

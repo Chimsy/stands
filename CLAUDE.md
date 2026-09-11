@@ -231,13 +231,24 @@ A branch owns its townships, staff, buyers, and every sale, receipt and journal
 entry raised there. That single dimension is what lets the same ledger answer
 both "how did Bulawayo do" and "how did the group do".
 
-Everything operational is scoped to the signed-in user's branch, and a record
-belonging to another branch reads as **404, not 403** - a 403 would confirm the
-reference exists. Statements are the one place a caller may cross the boundary,
-and only to consolidate the whole group.
+Everything operational is scoped to the branch the request is **worked from**,
+and a record belonging to another branch reads as **404, not 403** - a 403 would
+confirm the reference exists. Statements are the one place a caller may cross
+the boundary, and only to consolidate the whole group.
 
-Seeded sign-ins: `test@example.com` (Harare) and `bulawayo@example.com`
-(Bulawayo), both with the password `password`.
+There are two levels of account. A **sales** agent is fixed to the branch they
+belong to. An **admin** may work from any branch: the front-end holds the choice
+in a cookie and sends it as `X-Branch`, `ResolveActiveBranch` settles it before
+anything queries, and `/api/v1/dashboard` reports the sales floor for one branch
+or the whole group.
+
+Seeded sign-ins, all with the password `#p@$$123!`:
+
+| Account | Role | Branch |
+| --- | --- | --- |
+| `harare@chimsy.co.za` | Sales | Harare |
+| `bulawayo@chimsy.co.za` | Sales | Bulawayo |
+| `magaya@chimsy.co.za` | Admin | Harare, and free to switch |
 
 ## Where the data lives
 

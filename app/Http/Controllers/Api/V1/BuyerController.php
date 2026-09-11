@@ -22,7 +22,7 @@ class BuyerController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $buyers = Buyer::query()
-            ->where('branch_id', $request->user()->branch_id)
+            ->where('branch_id', $request->user()->activeBranch()?->id)
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $term = '%'.addcslashes($request->string('search')->toString(), '%_\\').'%';
 
@@ -41,7 +41,7 @@ class BuyerController extends Controller
     public function store(StoreBuyerRequest $request): JsonResponse
     {
         $buyer = Buyer::create([
-            'branch_id' => $request->user()->branch_id,
+            'branch_id' => $request->user()->activeBranch()?->id,
             'name' => $request->string('name'),
             'email' => $request->input('email'),
             'phone' => $request->input('phone'),

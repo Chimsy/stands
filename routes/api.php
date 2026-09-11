@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\BalanceSheetController;
 use App\Http\Controllers\Api\V1\BranchController;
 use App\Http\Controllers\Api\V1\BuyerController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\IncomeStatementController;
 use App\Http\Controllers\Api\V1\ReceiptController;
 use App\Http\Controllers\Api\V1\ReceivablesAgeingController;
@@ -20,7 +21,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         ->middleware('throttle:login')
         ->name('login');
 
-    Route::middleware('auth:sanctum')->group(function (): void {
+    /**
+     * `branch` settles which office the request is worked from before anything
+     * queries, so an administrator switching branches changes every list,
+     * document number and statement on the page at once.
+     */
+    Route::middleware(['auth:sanctum', 'branch'])->group(function (): void {
         Route::post('logout', [TokenController::class, 'destroy'])->name('logout');
         Route::get('user', [UserController::class, 'show'])->name('user.show');
         Route::get('branches', [BranchController::class, 'index'])->name('branches.index');
@@ -36,6 +42,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::apiResource('receipts', ReceiptController::class)
             ->only(['index', 'show'])
             ->parameters(['receipts' => 'payment']);
+
+        /** Head office only: it reports across every branch at once. */
+        Route::get('dashboard', [DashboardController::class, 'show'])
+            ->middleware('admin')
+            ->name('dashboard.show');
 
         Route::prefix('reports')->name('reports.')->group(function (): void {
             Route::get('trial-balance', [TrialBalanceController::class, 'show'])->name('trial-balance');

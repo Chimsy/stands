@@ -60,10 +60,17 @@ export interface SitePlan {
   blocks: BlockLabel[];
 }
 
+/** An agent works one branch; an administrator may work any of them. */
+export type UserRole = "sales" | "admin";
+
 export interface AuthenticatedUser {
   id: number;
   name: string;
   email: string;
-  /** Null only for an account that has not been assigned an office yet. */
+  role: UserRole;
+  isAdmin: boolean;
+  /** The office this request answered for, not necessarily the user's home one. Null only for an account with no office. */
   branch: { code: string; name: string; city: string } | null;
+  /** The offices this user may switch between: one for an agent, all of them for an administrator. */
+  branches: { code: string; name: string; city: string }[];
 }

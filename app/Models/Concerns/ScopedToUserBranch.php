@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Resolves route bindings only within the signed-in user's branch.
+ * Resolves route bindings only within the branch the request is being worked
+ * from - an agent's own office, or whichever one an administrator selected.
  *
  * A record belonging to another branch is reported as missing rather than
  * forbidden: a 403 would confirm that the reference exists, which is enough to
@@ -19,7 +20,7 @@ trait ScopedToUserBranch
     public function resolveRouteBinding($value, $field = null): ?Model
     {
         return $this->newQuery()
-            ->forBranch(Auth::user()?->branch)
+            ->forBranch(Auth::user()?->activeBranch())
             ->where($field ?? $this->getRouteKeyName(), $value)
             ->first();
     }
