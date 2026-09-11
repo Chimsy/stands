@@ -194,13 +194,21 @@ when a root `package.json` exists, which is why removing it was enough.)
 
 ## Working on it
 
+The backend runs on **MySQL** (`stands` database on `127.0.0.1:3306`). Create
+the database, fill in the `DB_*` block in `.env`, then:
+
 ```bash
 composer setup                      # install, key, migrate --seed
 cd front-end && cp .env.example .env.local && npm run dev
 ```
 
+The **test suite runs on SQLite in memory**, pinned in `phpunit.xml`, so it stays
+fast and needs no database. That divergence is deliberate but it bites: see the
+date-range trap in `.ai/rules/actions-reports.md` before writing anything that
+filters on a date, because the permissive engine is the one the tests use.
+
 Every page and every endpoint except `POST /api/v1/login` requires a token, and
-everything a user sees is scoped to their branch.
+everything a user sees is scoped to the branch the request is worked from.
 
 - Backend tests: `php artisan test --compact`. Format with `vendor/bin/pint --dirty --format agent`.
 - Front-end: `npm run build` and `npx eslint` from `front-end/`.
@@ -266,6 +274,7 @@ produced the way a real one would be. Seeding takes about ten seconds.
 
 `.ai/rules/` holds the settled decisions and the traps - the posting rules, the
 branch scoping contract, the API shape, the front-end's server-side-only API
-access, the Next 16 `proxy.ts` rename, and a SQLite `whereRaw` binding trap that
-silently returns wrong rows. Start at `.ai/rules/index.md` and read every file
-whose globs match what you are touching.
+access, the Next 16 `proxy.ts` rename, and two engine traps that silently return
+wrong rows rather than erroring - a `whereRaw` float binding and a date-range
+filter that loses its closing day. Start at `.ai/rules/index.md` and read every
+file whose globs match what you are touching.

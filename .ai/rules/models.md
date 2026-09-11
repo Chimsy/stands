@@ -10,6 +10,8 @@ PDO binds PHP floats as strings. SQLite only applies numeric affinity when a par
 
 Keep bound numbers inside arithmetic so they are forced to numbers, e.g. `... <= ? * ?` binding the radius twice, or move the term to the left and compare against a literal 0. `Stand::near()` documents the live example. If you add a numeric whereRaw, assert its result against the same calculation done in PHP.
 
+The app runs on MySQL, where this particular binding is not a problem - but the test suite runs on SQLite, so the defensive form is what keeps the tests meaningful. Do not "simplify" it away because MySQL tolerates the plain version.
+
 ## Branch is the tenant dimension: scope every query and binding to it
 One database holds every branch. A branch owns its townships, its staff, its buyers, and every sale, receipt and journal entry raised there, which is what lets the same ledger produce per-branch and consolidated statements.
 

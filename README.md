@@ -12,9 +12,28 @@ several branches. Two applications in one repository:
 
 - PHP 8.4 and Composer
 - Node 20+
+- MySQL 8+ reachable on `127.0.0.1:3306`
 - [Laravel Herd](https://herd.laravel.com), which serves the backend at `https://stands.test`
 
 ## Setup
+
+Create the database and point `.env` at it. The schema is built by migration,
+so the database only needs to exist and be writable:
+
+```sql
+CREATE DATABASE stands CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=stands
+DB_USERNAME=
+DB_PASSWORD=
+```
+
+Then:
 
 ```bash
 composer setup
@@ -34,10 +53,13 @@ npm run dev
 
 Open <http://localhost:3000> and sign in. Everything is behind the sign-in.
 
-| Sign-in | Branch | Password |
+| Sign-in | Role | Branch |
 | --- | --- | --- |
-| `test@example.com` | Harare — Riverstone Park Estate | `password` |
-| `bulawayo@example.com` | Bulawayo — Hillside Park Estate | `password` |
+| `harare@chimsy.co.za` | Sales | Harare — Riverstone Park Estate |
+| `bulawayo@chimsy.co.za` | Sales | Bulawayo — Hillside Park Estate |
+| `magaya@chimsy.co.za` | Admin | Harare, and free to switch to any branch |
+
+All three use the password `#p@$$123!`.
 
 ## What it does
 
@@ -45,6 +67,7 @@ Open <http://localhost:3000> and sign in. Everything is behind the sign-in.
 - **Selling** — cash or a deposit-and-instalments payment plan, against a registered buyer.
 - **Receipting** — every payment issues a numbered receipt, printable and saveable as a PDF from the browser.
 - **Statements** — income statement, balance sheet, trial balance and receivables ageing, for the branch or consolidated across the group, read live from the ledger.
+- **Dashboard** — head-office only: signings against collections by month, branch performance, stock take-up, sale mix and leading agents, for one branch or the whole group.
 
 ## The accounting
 
@@ -79,8 +102,13 @@ is computed rather than posted.
 
 Versioned under `/api/v1`. Every route except `login` requires a Sanctum bearer
 token, so unauthenticated requests get `401` rather than a redirect. Operational
-routes are scoped to the caller's branch, and another branch's record returns
-`404` rather than `403`.
+routes are scoped to the branch the request is worked from, and another branch's
+record returns `404` rather than `403`.
+
+A sales agent is fixed to their own branch. An administrator names the office
+they are working from in an `X-Branch` header, and every list, document and
+statement in that request answers for it; naming a branch they are not entitled
+to is a `403`.
 
 | Method | Route | |
 | --- | --- | --- |
@@ -101,6 +129,7 @@ routes are scoped to the caller's branch, and another branch's record returns
 | `GET` | `/api/v1/reports/income-statement` | Also takes `from`; defaults to the year to date. |
 | `GET` | `/api/v1/reports/balance-sheet` | |
 | `GET` | `/api/v1/reports/receivables-ageing` | Outstanding instalments, bucketed by how late they are. |
+| `GET` | `/api/v1/dashboard` | Administrators only. Same `branch`/`from`/`to` scope as a statement. |
 
 Stands are identified by their surveyed stand number, not a database id.
 Coordinates are metres on the site plan, origin at its top-left corner.
@@ -111,6 +140,11 @@ Coordinates are metres on the site plan, origin at its top-left corner.
 php artisan test --compact
 vendor/bin/pint --dirty --format agent
 ```
+
+The suite runs against SQLite in memory (pinned in `phpunit.xml`), so it is
+fast and needs no database of its own. That is a different engine from the one
+the app runs on - see the date-range trap in `.ai/rules/actions-reports.md`
+before writing a report that filters on a date.
 
 The accounting is covered against hand-worked figures in
 `tests/Feature/Reports/FinancialStatementsTest.php`, which asserts that debits

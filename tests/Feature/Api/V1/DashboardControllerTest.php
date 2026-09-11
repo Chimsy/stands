@@ -179,6 +179,51 @@ it('keeps the outstanding figure cumulative even when the period is narrow', fun
         ->assertJsonPath('data.totals.outstandingCents', 9_000_00);
 });
 
+/**
+ * The last day of a period is inside it.
+ *
+ * Worth its own test because the engines disagree: SQLite stores a `date`
+ * column as "2026-06-15 00:00:00", which sorts after a bare "2026-06-15" upper
+ * bound, so `whereBetween` drops the closing day there while MySQL includes it.
+ * The suite runs on SQLite, so without this the stricter engine goes unchecked.
+ */
+it('counts a sale and a receipt dated on the closing day of the period', function () {
+    $stand = Stand::factory()->status(StandStatus::Sold)->create([
+        'site_plan_id' => SitePlan::factory()->create(['branch_id' => $this->harare->id])->id,
+    ]);
+
+    $lastDay = Sale::factory()->create([
+        'branch_id' => $this->harare->id,
+        'stand_id' => $stand->id,
+        'buyer_id' => Buyer::factory()->create(['branch_id' => $this->harare->id])->id,
+        'sale_date' => '2026-06-15',
+        'type' => SaleType::Cash,
+        'price_cents' => 7_000_00,
+        'cost_cents' => 4_200_00,
+    ]);
+
+    Payment::factory()->create([
+        'branch_id' => $this->harare->id,
+        'sale_id' => $lastDay->id,
+        'paid_on' => '2026-06-15',
+        'amount_cents' => 1_500_00,
+    ]);
+
+    Sanctum::actingAs(adminAt($this->harare));
+
+    $this->getJson(route('api.v1.dashboard.show', ['branch' => 'HRE', 'to' => '2026-06-15']))
+        ->assertOk()
+        ->assertJsonPath('data.to', '2026-06-15')
+        ->assertJsonPath('data.totals.salesCount', 2)
+        ->assertJsonPath('data.totals.valueCents', 17_000_00)
+        ->assertJsonPath('data.totals.collectedCents', 6_500_00)
+        /** The monthly series has to agree with the headline it summarises. */
+        ->assertJsonPath('data.monthly.5.month', '2026-06')
+        ->assertJsonPath('data.monthly.5.valueCents', 7_000_00)
+        ->assertJsonPath('data.monthly.5.collectedCents', 1_500_00)
+        ->assertJsonPath('data.mix.0.salesCount', 2);
+});
+
 it('lists the latest signings with what is still owed on each', function () {
     Sanctum::actingAs(adminAt($this->harare));
 

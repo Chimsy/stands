@@ -15,3 +15,10 @@ The ledger is the record of the money. Everything else - a sale's status, an ins
 - The deposit is deliberately NOT allocated to the instalment schedule (`allocateToSchedule: false`), because the schedule only covers the price after the deposit. Crediting it would run every plan ahead and hide real arrears.
 - Statements are derived from the journal on every request - there is no period close and no summary table. Retained earnings is computed as revenue less expenses, not posted.
 - The books must satisfy: trial balance debits == credits, assets == liabilities + equity, and receivables ageing total == the Accounts Receivable balance. `tests/Feature/Reports/FinancialStatementsTest.php` asserts all three against hand-worked figures.
+
+## Never whereBetween a date column - it drops the last day on SQLite
+The app runs on MySQL but the test suite runs on SQLite in memory, and the two store a `date` column differently. SQLite has no date type, so Laravel writes the text `"2026-09-11 00:00:00"`, which sorts *after* a bare `"2026-09-11"` upper bound. `whereBetween('paid_on', [$from, $to])` therefore silently drops the closing day of every period on SQLite while including it on MySQL - no error, just a quietly short total. It cost the dashboard the last day of every range until it was caught by checksumming the two engines against each other.
+
+Use the half-open form instead: `where($column, '>=', $from)` and `where($column, '<', $to->copy()->addDay())`. It is correct on both engines and, unlike `whereDate()`, leaves the column bare so the `(branch_id, sale_date)` / `(branch_id, paid_on)` indexes are still used. `SalesDashboard::withinPeriod()` is the helper; `tests/Feature/Api/V1/DashboardControllerTest.php` pins a sale and a receipt on the closing day and fails if anyone reverts it.
+
+Any new date-range report needs the same treatment, and a test with a record on the boundary - the suite's engine is the permissive one.

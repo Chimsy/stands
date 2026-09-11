@@ -7,6 +7,8 @@ use App\Enums\StandStatus;
 use App\Models\Branch;
 use App\Models\Payment;
 use App\Models\Sale;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +83,23 @@ class SalesDashboard
     }
 
     /**
+     * Narrows a query to an inclusive date range, correctly on either engine.
+     *
+     * `whereBetween($column, [$from, $to])` silently drops the last day on
+     * SQLite: a `date` column is stored there as the text "2026-09-11 00:00:00",
+     * which sorts after the bare "2026-09-11" upper bound. Half-open against the
+     * following morning is true on both engines, and unlike `whereDate()` it
+     * leaves the column bare, so the (branch_id, date) indexes are still used.
+     *
+     * @param  Builder<covariant Model>  $query
+     */
+    private function withinPeriod(Builder $query, string $column, Carbon $from, Carbon $to): void
+    {
+        $query->where($column, '>=', $from->toDateString())
+            ->where($column, '<', $to->copy()->addDay()->toDateString());
+    }
+
+    /**
      * Stands per branch per status. Stock belongs to a site plan rather than
      * directly to a branch, so the plan is what carries the branch here.
      *
@@ -122,7 +141,7 @@ class SalesDashboard
     {
         return Sale::query()
             ->forBranch($branch)
-            ->whereBetween('sale_date', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'sale_date', $from, $to))
             ->groupBy('branch_id')
             ->selectRaw('branch_id, COUNT(*) AS sales_count, SUM(price_cents) AS value_cents, SUM(cost_cents) AS cost_cents')
             ->get()
@@ -141,7 +160,7 @@ class SalesDashboard
     {
         return Payment::query()
             ->forBranch($branch)
-            ->whereBetween('paid_on', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'paid_on', $from, $to))
             ->groupBy('branch_id')
             ->selectRaw('branch_id, SUM(amount_cents) AS collected_cents')
             ->pluck('collected_cents', 'branch_id')
@@ -222,7 +241,7 @@ class SalesDashboard
 
         Sale::query()
             ->forBranch($branch)
-            ->whereBetween('sale_date', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'sale_date', $from, $to))
             ->select(['id', 'sale_date', 'price_cents'])
             ->lazyById(1000)
             ->each(function (Sale $sale) use (&$months): void {
@@ -236,7 +255,7 @@ class SalesDashboard
 
         Payment::query()
             ->forBranch($branch)
-            ->whereBetween('paid_on', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'paid_on', $from, $to))
             ->select(['id', 'paid_on', 'amount_cents'])
             ->lazyById(1000)
             ->each(function (Payment $payment) use (&$months): void {
@@ -263,7 +282,7 @@ class SalesDashboard
     {
         $signed = Sale::query()
             ->forBranch($branch)
-            ->whereBetween('sale_date', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'sale_date', $from, $to))
             ->groupBy('type')
             ->selectRaw('type, COUNT(*) AS sales_count, SUM(price_cents) AS value_cents')
             ->get()
@@ -285,7 +304,7 @@ class SalesDashboard
     {
         return Sale::query()
             ->forBranch($branch)
-            ->whereBetween('sale_date', [$from->toDateString(), $to->toDateString()])
+            ->tap(fn ($query) => $this->withinPeriod($query, 'sale_date', $from, $to))
             ->whereNotNull('sold_by')
             ->join('users', 'users.id', '=', 'sales.sold_by')
             ->leftJoin('branches', 'branches.id', '=', 'sales.branch_id')
