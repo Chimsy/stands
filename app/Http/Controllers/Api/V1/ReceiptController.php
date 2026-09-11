@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\IndexReceiptRequest;
 use App\Http\Resources\PaymentResource;
 use App\Http\Resources\ReceiptResource;
 use App\Models\Payment;
@@ -17,10 +18,14 @@ class ReceiptController extends Controller
 {
     private const PER_PAGE = 25;
 
-    public function index(Request $request): AnonymousResourceCollection
+    /**
+     * Receipts issued at the branch the request is worked from, or across every
+     * branch when an administrator asks for the group.
+     */
+    public function index(IndexReceiptRequest $request): AnonymousResourceCollection
     {
         $payments = Payment::query()
-            ->forBranch($request->user()->activeBranch())
+            ->forBranch($request->branch())
             ->with(['sale.stand:id,stand_number', 'sale.buyer', 'branch'])
             ->when($request->filled('search'), function ($query) use ($request): void {
                 $term = '%'.addcslashes($request->string('search')->toString(), '%_\\').'%';

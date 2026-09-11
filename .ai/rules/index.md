@@ -8,4 +8,5 @@ Before planning or editing, find the row whose globs match the file's path and r
 | {routes,bootstrap,config}/** | .ai/rules/architecture.md |
 | front-end/** | .ai/rules/front-end.md |
 | app/Http/** | .ai/rules/http.md |
+| mobile/** | .ai/rules/mobile.md |
 | app/Models/** | .ai/rules/models.md |

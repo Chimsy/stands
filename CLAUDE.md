@@ -174,12 +174,13 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 > has no Vite build and no root `package.json` - if the UI looks stale, the
 > Next.js dev server in `front-end/` is what needs restarting.
 
-Two applications in one repository, talking to each other over HTTP only.
+Three applications in one repository, talking to each other over HTTP only.
 
 | | |
 | --- | --- |
 | Repository root | Laravel 13 **API-only backend**. Served by Herd at `https://stands.test`. |
-| `front-end/` | Next.js 16 app - the **only** user interface. Runs at `http://localhost:3000`. |
+| `front-end/` | Next.js 16 app - the full user interface. Runs at `http://localhost:3000`. |
+| `mobile/Stands/` | Native Android app (Kotlin, Compose, MVVM) - the head-office view on a phone, **administrators only**. See its own [README](mobile/Stands/README.md). |
 
 ## The backend serves no HTML
 
@@ -212,6 +213,7 @@ everything a user sees is scoped to the branch the request is worked from.
 
 - Backend tests: `php artisan test --compact`. Format with `vendor/bin/pint --dirty --format agent`.
 - Front-end: `npm run build` and `npx eslint` from `front-end/`.
+- Android: `./gradlew testDebugUnitTest lintDebug` from `mobile/Stands/`. Lint is part of the gate, not advisory.
 - Never run `npm` from the repository root; it has no package manifest.
 
 ## Selling, receipting and the books
@@ -253,6 +255,13 @@ books and the stock:
   cookie and sends it as `X-Branch`, and `ResolveActiveBranch` settles it before
   anything queries. They read any single branch's statements *and* the group,
   and `/api/v1/dashboard` is theirs alone.
+
+There are two ways to name the office, and they mean the same thing. The
+`X-Branch` header sets it for a whole request, which is what the web app's
+branch switcher does. A `branch` query parameter overrides it per call and also
+accepts `group`, which is what the statements, the dashboard and the two
+activity ledgers take - `ResolvesBranchScope` is the single implementation, so
+they cannot drift apart on who may see what.
 
 Seeded sign-ins, all with the password `#p@$$123!`:
 

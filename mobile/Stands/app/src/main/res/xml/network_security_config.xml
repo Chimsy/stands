@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Shipped policy: HTTPS only, against the system trust store, with nothing
+    relaxed and no exceptions.
+
+    The debug build replaces this file wholesale from `src/debug/res` - which is
+    why the development allowances live there and cannot reach a release APK by
+    accident.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

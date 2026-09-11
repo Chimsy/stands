@@ -7,6 +7,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\SaleStatus;
 use App\Enums\SaleType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\IndexSaleRequest;
 use App\Http\Requests\Api\V1\StoreSaleRequest;
 use App\Http\Resources\SaleResource;
 use App\Models\Sale;
@@ -21,15 +22,16 @@ class SaleController extends Controller
     private const PER_PAGE = 25;
 
     /**
-     * Sales booked at the caller's branch, most recent first.
+     * Sales booked at the branch the request is worked from, most recent first,
+     * or across every branch when an administrator asks for the group.
      *
      * Unlike the stand list, which the map needs whole, this is paginated: it
      * is a ledger of activity that only grows.
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(IndexSaleRequest $request): AnonymousResourceCollection
     {
         $sales = Sale::query()
-            ->forBranch($request->user()->activeBranch())
+            ->forBranch($request->branch())
             ->with(['stand:id,stand_number', 'buyer', 'branch'])
             ->withSum('payments', 'amount_cents')
             ->when(

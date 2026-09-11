@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Http\Requests\Api\V1\Concerns\ResolvesBranchScope;
 use App\Models\Branch;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -12,8 +13,7 @@ use Illuminate\Support\Carbon;
  */
 class StatementRequest extends FormRequest
 {
-    /** Value of the `branch` parameter that asks for every branch consolidated. */
-    public const GROUP = 'group';
+    use ResolvesBranchScope;
 
     /**
      * @return array<string, array<int, mixed>>
@@ -38,31 +38,17 @@ class StatementRequest extends FormRequest
      */
     public function branch(): ?Branch
     {
-        $requested = $this->string('branch')->toString();
+        return $this->resolveBranchScope();
+    }
 
-        if ($requested === '') {
-            return $this->user()->activeBranch();
-        }
+    protected function groupRefusalMessage(): string
+    {
+        return 'Consolidated statements are for administrators only.';
+    }
 
-        if (strtolower($requested) === self::GROUP) {
-            abort_unless(
-                $this->user()->isAdmin(),
-                403,
-                'Consolidated statements are for administrators only.',
-            );
-
-            return null;
-        }
-
-        $branch = Branch::query()->where('code', strtoupper($requested))->first();
-
-        abort_unless(
-            $branch !== null && $this->user()->canWorkFrom($branch),
-            403,
-            'You can only read your own branch\'s books.',
-        );
-
-        return $branch;
+    protected function branchRefusalMessage(): string
+    {
+        return 'You can only read your own branch\'s books.';
     }
 
     public function asAt(): Carbon

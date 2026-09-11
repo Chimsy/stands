@@ -20,3 +20,8 @@ Every authenticated route sits behind the `branch` middleware. The caller names 
 `StatementRequest::branch()` decides whose books a caller reads. An agent gets their own branch only - naming another, or asking for the consolidated `group`, is a 403. An administrator may name any branch or `group`. It is shared by the statements and `GET /v1/dashboard`, so the books and the sales floor read the same scope and dates.
 
 Head-office-only routes add the `admin` alias (`EnsureUserIsAdmin`) and answer 403 - unlike a cross-branch record, the existence of the endpoint is not worth hiding.
+
+## ResolvesBranchScope is the one place that decides whose data a caller sees
+The statements, the dashboard, and the sales and receipts ledgers all take the same `branch` parameter through `App\Http\Requests\Api\V1\Concerns\ResolvesBranchScope`: omitted means the branch the request is worked from, a code means that branch, and `group` means all of them and is administrators only. Add new scoped endpoints through the trait rather than re-deriving the policy - four copies of it is how one of them ends up lenient.
+
+It also closes a hole worth knowing about: `Sale::forBranch(null)` and `Payment::forBranch(null)` mean "every branch" (the statements consolidate through them), so an account with no branch would otherwise fall through a null scope to the widest possible answer. The trait aborts 403 instead. `tests/Feature/Api/V1/LedgerBranchScopeTest.php` pins all of it.

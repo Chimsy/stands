@@ -12,6 +12,7 @@ several branches. Two applications in one repository:
 
 - PHP 8.4 and Composer
 - Node 20+
+- Android Studio and JDK 17+, for the phone app in `mobile/Stands/` (optional)
 - MySQL 8+ reachable on `127.0.0.1:3306`
 - [Laravel Herd](https://herd.laravel.com), which serves the backend at `https://stands.test`
 
@@ -68,6 +69,7 @@ All three use the password `#p@$$123!`.
 - **Receipting** — every payment issues a numbered receipt, printable and saveable as a PDF from the browser.
 - **Statements** — income statement, balance sheet, trial balance and receivables ageing, read live from the ledger. An agent sees their own branch; an administrator sees the consolidated group and each branch on its own.
 - **Dashboard** — head-office only: signings against collections by month, branch performance, stock take-up, sale mix and leading agents, for one branch or the whole group.
+- **Android app** — the same head-office view on a phone, offline-first: it opens from a local cache, says when the figures were last refreshed, and keeps working without a connection. See [`mobile/Stands/`](mobile/Stands/README.md).
 
 ## The accounting
 
@@ -121,10 +123,10 @@ another branch's books, the group, and the dashboard.
 | `GET` | `/api/v1/stands` | Every stand. Filter with `status`, `block`, `road`, `search`, or `x`+`y`+`radius`. |
 | `GET` | `/api/v1/stands/{standNumber}` | One stand, e.g. `/api/v1/stands/2001`. |
 | `GET`&nbsp;/&nbsp;`POST` | `/api/v1/buyers` | List or register buyers. `search` narrows by name, phone or identity number. |
-| `GET`&nbsp;/&nbsp;`POST` | `/api/v1/sales` | List or book sales. Filter with `status`, `type`, `standNumber`. |
+| `GET`&nbsp;/&nbsp;`POST` | `/api/v1/sales` | List or book sales. Filter with `status`, `type`, `standNumber`, and `branch` (a code, or `group` for administrators). |
 | `GET` | `/api/v1/sales/{reference}` | One sale with its schedule and receipts. |
 | `POST` | `/api/v1/sales/{reference}/payments` | Receipt a payment; returns the receipt. |
-| `GET` | `/api/v1/receipts` | Receipts issued at the branch. |
+| `GET` | `/api/v1/receipts` | Receipts issued at the branch. `branch` scopes it as above. |
 | `GET` | `/api/v1/receipts/{receiptNumber}` | One printable receipt. |
 | `GET` | `/api/v1/reports/trial-balance` | `branch=<code>`, or `branch=group` for administrators; `to` sets the cut-off. |
 | `GET` | `/api/v1/reports/income-statement` | Also takes `from`; defaults to the year to date. |
