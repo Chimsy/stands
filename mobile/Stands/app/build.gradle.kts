@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -16,9 +18,20 @@ plugins {
 val apiBaseUrl: String = providers.gradleProperty("stands.apiBaseUrl")
     .getOrElse("https://magaya.chimsy.co.za/api/v1/")
 
+/**
+ * Whether the base URL names a backend served from the developer's own machine.
+ *
+ * Only then does the debug DNS override default to anything: a public host must
+ * resolve the way it does everywhere else, or a debug build silently sends the
+ * live API's traffic to whatever is listening on the workstation.
+ */
+val isLocalApiHost: Boolean = URI(apiBaseUrl).host.orEmpty().let { host ->
+    host == "localhost" || host.endsWith(".test") || host.endsWith(".localhost")
+}
+
 /** The emulator reaches the machine it runs on at 10.0.2.2; a device needs the LAN address. */
 val devHostAddress: String = providers.gradleProperty("stands.devHostAddress")
-    .getOrElse("10.0.2.2")
+    .getOrElse(if (isLocalApiHost) "10.0.2.2" else "")
 
 android {
     namespace = "za.co.chimsy.stands"

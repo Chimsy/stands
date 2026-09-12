@@ -15,3 +15,8 @@ Two traps that cost real debugging:
 - `minSdk` is 25 and `java.time` is API 26. Core library desugaring is enabled for exactly this; `lintDebug` is part of the build gate because it is what catches this class of bug - the emulator is too new to.
 
 Point the app at a backend with `-Pstands.apiBaseUrl=...`; never hard-code a workstation address. Debug builds permit cleartext to loopback only, from `src/debug/res/xml/network_security_config.xml`, which overlays the strict `src/main` one.
+
+## DevHostDns only redirects local API hosts
+`stands.devHostAddress` defaults to `10.0.2.2` only when `stands.apiBaseUrl` names a local backend (`localhost`, `.test`, `.localhost`); against a deployed host it defaults to empty and DNS resolves normally.
+
+This is not cosmetic: when the default base URL was pointed at the live API while the override still defaulted to `10.0.2.2`, every debug build sent `magaya.chimsy.co.za` to the workstation and login died with a 15s `SocketTimeoutException` to `/10.0.2.2:443` - while OkHttp's log still showed the public URL, because the rewrite happens in the resolver, not in the request.

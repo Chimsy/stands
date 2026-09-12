@@ -18,7 +18,12 @@ a Gradle property rather than editing source:
 | Property | Default | |
 | --- | --- | --- |
 | `stands.apiBaseUrl` | `https://magaya.chimsy.co.za/api/v1/` | Base URL, trailing slash required. |
-| `stands.devHostAddress` | `10.0.2.2` | Debug only: what the API's hostname resolves to. |
+| `stands.devHostAddress` | `10.0.2.2` for a local host, otherwise empty | Debug only: what the API's hostname resolves to. |
+
+The DNS override defaults to on only when `stands.apiBaseUrl` names a local
+backend (`localhost`, or a `.test` / `.localhost` name). Against the deployed
+API the hostname resolves normally - otherwise a debug build would try to reach
+`magaya.chimsy.co.za` on the workstation and time out.
 
 Herd serves the backend under a name the emulator cannot resolve, signed by a
 local authority it has never heard of. Two ways round it, both debug-only:
