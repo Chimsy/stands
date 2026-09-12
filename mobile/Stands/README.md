@@ -12,12 +12,12 @@ The app talks to the Laravel API in the repository root. Point it at yours with
 a Gradle property rather than editing source:
 
 ```bash
-./gradlew installDebug -Pstands.apiBaseUrl=https://stands.test/api/v1/
+./gradlew installDebug -Pstands.apiBaseUrl=https://magaya.chimsy.co.za/api/v1/
 ```
 
 | Property | Default | |
 | --- | --- | --- |
-| `stands.apiBaseUrl` | `https://stands.test/api/v1/` | Base URL, trailing slash required. |
+| `stands.apiBaseUrl` | `https://magaya.chimsy.co.za/api/v1/` | Base URL, trailing slash required. |
 | `stands.devHostAddress` | `10.0.2.2` | Debug only: what the API's hostname resolves to. |
 
 Herd serves the backend under a name the emulator cannot resolve, signed by a

@@ -14,7 +14,7 @@ plugins {
  * workstation's address.
  */
 val apiBaseUrl: String = providers.gradleProperty("stands.apiBaseUrl")
-    .getOrElse("https://stands.test/api/v1/")
+    .getOrElse("https://magaya.chimsy.co.za/api/v1/")
 
 /** The emulator reaches the machine it runs on at 10.0.2.2; a device needs the LAN address. */
 val devHostAddress: String = providers.gradleProperty("stands.devHostAddress")
