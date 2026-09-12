@@ -1,0 +1,2179 @@
+openapi: 3.1.0
+
+info:
+  title: Stand Locator API
+  version: "1.0.0"
+  summary: Branch-scoped stand sales, recorded as double-entry bookkeeping.
+  description: |
+    The `v1` API behind the Stand Locator: a stand sales system whose selling and receipting are recorded as
+    double-entry bookkeeping, so the financial statements are derived from the ledger rather than assembled
+    from summaries.
+
+    ## Authentication
+
+    Every route except `POST /api/v1/login` and the two open health endpoints requires a Sanctum bearer token.
+    Sign in, then send `Authorization: Bearer <token>`. Unauthenticated requests answer `401` in JSON rather
+    than redirecting. Signing out revokes only the calling token, leaving the user's other devices alone.
+
+    ## Branch is the tenant dimension
+
+    One database holds every branch. A branch owns its townships, staff, buyers, and every sale, receipt and
+    journal entry raised there, and everything operational is scoped to the office the request is **worked
+    from**.
+
+    - A **sales** agent is fixed to their own branch. They read their own branch's statements and nothing
+      else - not another office, and not the consolidated group, which is a head-office figure.
+    - An **admin** may work from any branch. They name the office in the `X-Branch` header and the whole
+      request - stands, sales, receipts, document numbers, statements - answers for it.
+    - The statements, the dashboard and the two activity ledgers also take a `branch` **query parameter**,
+      which overrides the header for that call and additionally accepts `group` for every branch consolidated.
+      `group` is administrators only.
+
+    **A record belonging to another branch reads as `404`, not `403`** - a 403 would confirm the reference
+    exists. Endpoints that are head-office-only answer `403`, because the existence of the endpoint is not a
+    secret worth keeping.
+
+    ## Shape
+
+    - Keys are camelCase.
+    - Money crosses the API in **major units** (`12500` means $12,500.00) except in the reports, which use
+      integer minor units and say so in the key (`*Cents`). The ledger stores cents throughout; resources
+      divide by 100 at the edge.
+    - Identifiers are the human ones: `stands/2001`, `sales/SALE-HRE-000123`, `receipts/RCP-HRE-000456`.
+      Database ids are deliberately not exposed for stands, sales or receipts.
+    - Single records are wrapped in `data`; lists are `data` plus, where paginated, `links` and `meta`.
+
+    ## Status codes
+
+    | Code | Means |
+    | --- | --- |
+    | 200 / 201 / 204 | Fine |
+    | 401 | No token, or a revoked one |
+    | 403 | Authenticated, but not entitled to that branch or that endpoint |
+    | 404 | No such record **in the branch this request is worked from** |
+    | 422 | Validation failed, or the posting would put the books into an impossible state |
+    | 429 | Throttled - sign-in 5/min per account and address, health 60/min per address |
+    | 503 | A health check failed: this instance cannot serve requests |
+
+    ## Monitoring
+
+    See the **Health** tag. Point an orchestrator's liveness probe at `/api/v1/health`, the load balancer at
+    `/api/v1/health/ready`, and an alerting monitor at `/api/v1/health/diagnostics` with the `X-Health-Token`
+    header.
+
+servers:
+  - url: https://stands.test
+    description: Local, served by Herd.
+  - url: http://localhost:8000
+    description: Local, served by `php artisan serve`.
+  - url: https://api.change-me.example
+    description: Deployed. Replace with the real origin.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+    description: |
+      Three depths, because three different things ask. All of them answer `200` while the application is
+      usable and `503` once it is not, so a monitor needs no rule beyond the status code. `degraded` - serving,
+      but something wants looking at - is still `200`.
+  - name: Authentication
+    description: Issuing and revoking the tokens everything else is read with.
+  - name: Reference
+    description: Lookups the front-end needs to draw its chrome.
+  - name: Site plan and stands
+    description: The township a branch sells, and the stock on it.
+  - name: Buyers
+    description: People buying stands, registered at - and visible only to - the branch that took them on.
+  - name: Sales
+    description: |
+      Selling a stand and taking money for it. Both post double-entry journals through the actions, so the
+      statements move the moment these succeed. **Revenue is recognised at signing, not on collection**: a sale
+      takes the whole price to revenue, carries the unpaid part as a receivable, and charges the stand's cost
+      out of Land Inventory the same day. A payment only moves receivable to bank.
+  - name: Receipts
+    description: A receipt is a payment seen from the buyer's side, so both read the same record.
+  - name: Reports
+    description: |
+      The financial statements, derived from the journal on every request. There is no period close and no
+      summary table - retained earnings is computed as revenue less expenses rather than posted. Amounts are
+      integer minor units.
+  - name: Head office
+    description: Administrators only. An agent gets a plain `403`.
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthLive
+      security: []
+      description: |
+        Is the process up and routing requests? It reads nothing - no database, no cache - so it stays `200`
+        through a dependency outage. That is the point: a failing dependency should not have an orchestrator
+        restart a container that is running perfectly well.
+
+        Never rate limited, because a monitor has to be able to tell "down" from "throttled".
+
+        Point the orchestrator's liveness probe here.
+      responses:
+        "200":
+          description: The process is alive. Always, while it is running.
+          headers:
+            Cache-Control:
+              description: Always `no-store`; a cached health check is a lie the next time it is read.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+              example:
+                status: ok
+                app: Stand Locator
+                environment: production
+                version: 2026.09.12-1
+                time: "2026-09-12T22:38:37+02:00"
+
+  /api/v1/health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness
+      operationId: healthReady
+      security: []
+      description: |
+        Can this instance serve a request right now? Runs the critical checks only, so it is cheap enough to
+        poll every few seconds:
+
+        | Check | Fails when |
+        | --- | --- |
+        | `database` | the connection is refused or the driver errors |
+        | `migrations` | a migration has not been run - usually a deploy that stopped half way |
+        | `cache` | the store will not read back what it was just given |
+        | `storage` | `storage/framework` or `storage/logs` cannot be written |
+        | `chart-of-accounts` | an account the posting rules name by code is missing |
+
+        `200` means send it traffic; `503` means take it out of rotation. A check that answers correctly but
+        slower than `HEALTH_SLOW_MS` reports `degraded`, which is still `200`.
+
+        Messages here are written for an anonymous caller: they say what is wrong without naming hosts,
+        drivers or exception text. That detail is on the diagnostics endpoint.
+      responses:
+        "200":
+          description: Ready, or degraded but still serving.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+              example:
+                status: ok
+                app: Stand Locator
+                environment: production
+                version: 2026.09.12-1
+                time: "2026-09-12T22:38:37+02:00"
+                durationMs: 14.52
+                checks:
+                  database:
+                    status: ok
+                    message: The database answered.
+                    durationMs: 0.53
+                  migrations:
+                    status: ok
+                    message: The schema is up to date.
+                    durationMs: 8.46
+                  cache:
+                    status: ok
+                    message: The cache store read back what it was given.
+                    durationMs: 3.19
+                  storage:
+                    status: ok
+                    message: The storage paths are writable.
+                    durationMs: 0.32
+                  chart-of-accounts:
+                    status: ok
+                    message: Every account the posting rules need is present.
+                    durationMs: 1.11
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "503":
+          description: A critical check failed. This instance cannot serve requests.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+              example:
+                status: failed
+                app: Stand Locator
+                environment: production
+                version: 2026.09.12-1
+                time: "2026-09-12T22:38:37+02:00"
+                durationMs: 2012.4
+                checks:
+                  database:
+                    status: failed
+                    message: The database is not reachable.
+                    durationMs: 2000.11
+                  migrations:
+                    status: failed
+                    message: The migration state could not be read.
+                    durationMs: 6.2
+                  cache:
+                    status: ok
+                    message: The cache store read back what it was given.
+                    durationMs: 3.19
+                  storage:
+                    status: ok
+                    message: The storage paths are writable.
+                    durationMs: 0.32
+                  chart-of-accounts:
+                    status: failed
+                    message: The chart of accounts could not be read.
+                    durationMs: 2.58
+
+  /api/v1/health/diagnostics:
+    get:
+      tags: [Health]
+      summary: Diagnostics
+      operationId: healthDiagnostics
+      security:
+        - bearerAuth: []
+        - healthToken: []
+      description: |
+        Everything, for whoever has to fix it.
+
+        Adds the checks too expensive to poll - `queue` (pending and failed jobs, and how long the oldest has
+        waited) and `ledger` (total debits against total credits across every branch) - gives every check a
+        `detail` object, and describes the instance in `runtime` and its data in `footprint`.
+
+        **The ledger check is the one to alert on.** `PostJournalEntry` refuses an entry that does not balance,
+        so `checks.ledger.status = failed` means something has written to `journal_lines` behind its back, and
+        every statement derived from them has stopped being trustworthy.
+
+        **Two ways in**, because the two callers are different: an administrator's bearer token, or the
+        `HEALTH_CHECK_TOKEN` secret in an `X-Health-Token` header - which is how an unattended monitor reads it
+        without holding anybody's credentials. No token at all is `401`; a signed-in sales agent is `403`.
+      responses:
+        "200":
+          description: Nothing is failing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagnostics'
+              example:
+                status: ok
+                app: Stand Locator
+                environment: production
+                version: 2026.09.12-1
+                time: "2026-09-12T22:38:42+02:00"
+                durationMs: 39.34
+                checks:
+                  database:
+                    status: ok
+                    message: The database answered.
+                    durationMs: 0.53
+                    detail:
+                      connection: mysql
+                      driver: mysql
+                      database: stands
+                  migrations:
+                    status: ok
+                    message: The schema is up to date.
+                    durationMs: 8.46
+                    detail:
+                      ran: 18
+                      latest: 2026_09_11_214410_add_role_to_users_table
+                  cache:
+                    status: ok
+                    message: The cache store read back what it was given.
+                    durationMs: 10.19
+                    detail:
+                      store: database
+                  storage:
+                    status: ok
+                    message: The storage paths are writable.
+                    durationMs: 0.32
+                    detail:
+                      checked: [storage/framework, storage/logs]
+                      bootstrapCacheWritable: true
+                      defaultDisk: local
+                  chart-of-accounts:
+                    status: ok
+                    message: Every account the posting rules need is present.
+                    durationMs: 1.11
+                    detail:
+                      required: 6
+                  queue:
+                    status: ok
+                    message: 0 job(s) waiting, 0 failed.
+                    durationMs: 3.9
+                    detail:
+                      connection: database
+                      driver: database
+                      pending: 0
+                      failed: 0
+                      oldestPendingSeconds: null
+                  ledger:
+                    status: ok
+                    message: 5140 journal entries balance.
+                    durationMs: 14.83
+                    detail:
+                      entries: 5140
+                      totalDebitCents: 4838272983
+                      totalCreditCents: 4838272983
+                      differenceCents: 0
+                runtime:
+                  php: 8.4.23
+                  laravel: 13.31.0
+                  debug: false
+                  timezone: Africa/Harare
+                  maintenanceMode: false
+                  configCached: true
+                  routesCached: true
+                  eventsCached: true
+                  database: mysql
+                  cacheStore: database
+                  queueConnection: database
+                  filesystemDisk: local
+                  memoryUsageMb: 2
+                  memoryPeakMb: 2
+                footprint:
+                  branches: 2
+                  users: 3
+                  stands: 2446
+                  buyers: 180
+                  sales: 1101
+                  payments: 4037
+                  journalEntries: 5140
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "503":
+          description: |
+            A check failed. The body is the same report - read `checks` to see which, and `detail` for why.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagnostics'
+              example:
+                status: failed
+                app: Stand Locator
+                environment: production
+                version: 2026.09.12-1
+                time: "2026-09-12T22:38:42+02:00"
+                durationMs: 41.02
+                checks:
+                  ledger:
+                    status: failed
+                    message: "The ledger does not balance: something has written journal lines outside the posting action."
+                    durationMs: 15.2
+                    detail:
+                      entries: 5141
+                      totalDebitCents: 4838372983
+                      totalCreditCents: 4838272983
+                      differenceCents: 100000
+
+  /up:
+    get:
+      tags: [Health]
+      summary: Platform probe
+      operationId: platformProbe
+      security: []
+      description: |
+        Laravel's own health route, registered in `bootstrap/app.php`. It boots the framework and fires
+        `DiagnosingHealth`, nothing more - a dependency-free "did the container start" probe. It returns HTML,
+        not JSON, and is the one page this API serves.
+      responses:
+        "200":
+          description: The framework booted.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/v1/login:
+    post:
+      tags: [Authentication]
+      summary: Sign in
+      operationId: login
+      security: []
+      description: |
+        Exchanges credentials for a Sanctum token. `deviceName` labels the token so a user can tell their
+        sessions apart when revoking one; left out, the User-Agent is used.
+
+        A wrong password and an unknown account answer the same `422`, and both take the same time to answer.
+        Six attempts in a minute for the same account and address is `429`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: magaya@chimsy.co.za
+              password: "#p@$$123!"
+              deviceName: Sales laptop
+      responses:
+        "201":
+          description: A token, and the account it belongs to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, user]
+                properties:
+                  token:
+                    type: string
+                    description: 'Send as `Authorization: Bearer <token>`. Shown once; it is not retrievable later.'
+                    examples: ["12|kR3s9dkQ0v2mYw8zXlB1n6pTqA7fH5cJ"]
+                  user:
+                    $ref: '#/components/schemas/User'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/logout:
+    post:
+      tags: [Authentication]
+      summary: Sign out
+      operationId: logout
+      description: |
+        Revokes only the token that made the request, leaving the user signed in on their other devices.
+      responses:
+        "204":
+          description: The calling token has been revoked.
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/user:
+    get:
+      tags: [Authentication]
+      summary: The account behind the token
+      operationId: currentUser
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+      description: |
+        The signed-in account, the office this request answered for (`branch`), and the offices it may switch
+        between (`branches` - one for an agent, all of them for an administrator). The front-end calls this to
+        restore a session and to populate the branch switcher.
+      responses:
+        "200":
+          description: The account.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/User'
+              example:
+                data:
+                  id: 3
+                  name: Magaya
+                  email: magaya@chimsy.co.za
+                  role: admin
+                  isAdmin: true
+                  branch: {code: HRE, name: Harare Branch, city: Harare}
+                  branches:
+                    - {code: BYO, name: Bulawayo Branch, city: Bulawayo}
+                    - {code: HRE, name: Harare Branch, city: Harare}
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/branches:
+    get:
+      tags: [Reference]
+      summary: Every branch
+      operationId: listBranches
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+      description: |
+        Every branch, with the code that `X-Branch` and the `branch` query parameter take. Feeds the
+        administrator's branch switcher and the statements screen's consolidated option.
+      responses:
+        "200":
+          description: The branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Branch'
+              example:
+                data:
+                  - {code: BYO, name: Bulawayo Branch, city: Bulawayo}
+                  - {code: HRE, name: Harare Branch, city: Harare}
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/site-plan:
+    get:
+      tags: [Site plan and stands]
+      summary: The caller's township plan
+      operationId: showSitePlan
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+      description: |
+        The plan the map is drawn from: bounds, boundary, roads, zones and block labels, in plan-space metres
+        with the origin at the top-left corner. Each branch runs one township, so this is a singleton from the
+        front-end's point of view.
+      responses:
+        "200":
+          description: The plan.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SitePlan'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: The branch this request is worked from has no site plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/stands:
+    get:
+      tags: [Site plan and stands]
+      summary: Stands on the plan
+      operationId: listStands
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - name: status
+          in: query
+          description: Narrow to one status.
+          schema:
+            $ref: '#/components/schemas/StandStatus'
+        - name: block
+          in: query
+          description: Exact block name, e.g. `Block A`.
+          schema:
+            type: string
+            maxLength: 255
+        - name: road
+          in: query
+          description: Exact road name.
+          schema:
+            type: string
+            maxLength: 255
+        - name: search
+          in: query
+          description: Matches stand number, block or road.
+          schema:
+            type: string
+            maxLength: 255
+          examples:
+            standNumber:
+              value: "2001"
+        - name: x
+          in: query
+          description: Proximity search centre, metres from the plan's left edge. Requires `y` and `radius`.
+          schema:
+            type: number
+        - name: y
+          in: query
+          description: Proximity search centre, metres from the plan's top edge. Requires `x` and `radius`.
+          schema:
+            type: number
+        - name: radius
+          in: query
+          description: Proximity search radius in metres. Requires `x` and `y`.
+          schema:
+            type: number
+            minimum: 0
+            maximum: 10000
+      description: |
+        **Unpaginated by design.** The site map draws every stand in the township at once, so this returns the
+        whole filtered set rather than a page of it - narrow it with the filters instead. Scoped to the
+        caller's branch: an agent never sees another office's stock.
+
+        `x`, `y` and `radius` are a proximity search in plan-space metres and go together: supply one and you
+        must supply all three.
+      responses:
+        "200":
+          description: Every stand matching the filters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Stand'
+              example:
+                data:
+                  - standNumber: "2001"
+                    status: available
+                    block: Block A
+                    road: Chiremba Drive
+                    areaSqm: 332
+                    price: 8800
+                    updatedAt: "2026-04-28"
+                    centroid: {x: 131.1, y: 52.8}
+                    points:
+                      - {x: 118.4, y: 40.2}
+                      - {x: 143.8, y: 40.2}
+                      - {x: 143.8, y: 65.4}
+                      - {x: 118.4, y: 65.4}
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/stands/{standNumber}:
+    get:
+      tags: [Site plan and stands]
+      summary: One stand
+      operationId: showStand
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - name: standNumber
+          in: path
+          required: true
+          description: The surveyed stand number, which is the public identifier.
+          schema:
+            type: string
+          example: "2001"
+      description: |
+        One stand by its number, with its polygon and centroid. A stand belonging to another branch answers
+        `404` rather than `403` - a 403 would confirm the number exists.
+      responses:
+        "200":
+          description: The stand.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Stand'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFoundInBranch'
+
+  /api/v1/buyers:
+    get:
+      tags: [Buyers]
+      summary: Buyers at this branch
+      operationId: listBuyers
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - name: search
+          in: query
+          description: Matches name, email, phone or national id.
+          schema:
+            type: string
+            maxLength: 255
+      description: |
+        Buyers registered at the caller's branch, ordered by name and capped at 50. The list exists to pick one
+        when booking a sale, so narrow it with `search` rather than paging through it.
+      responses:
+        "200":
+          description: Matching buyers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Buyer'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Buyers]
+      summary: Register a buyer
+      operationId: storeBuyer
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+      description: |
+        Registers a buyer at the branch the request is worked from. Only `name` is required; the rest is what a
+        receipt and an agreement want to show.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreBuyerRequest'
+            example:
+              name: Tendai Moyo
+              email: tendai.moyo@example.com
+              phone: "+263 77 123 4567"
+              nationalId: 63-123456A00
+      responses:
+        "201":
+          description: The buyer, with the id a sale refers to them by.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Buyer'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/sales:
+    get:
+      tags: [Sales]
+      summary: The sales ledger
+      operationId: listSales
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SaleStatus'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/SaleType'
+        - name: standNumber
+          in: query
+          description: Finds the sale behind one stand without scanning the ledger.
+          schema:
+            type: string
+            maxLength: 255
+        - $ref: '#/components/parameters/Page'
+      description: |
+        Sales booked at the branch the request is worked from, most recent first, 25 to a page. Unlike the
+        stand list, which the map needs whole, this is a ledger of activity that only grows, so it is
+        paginated.
+      responses:
+        "200":
+          description: A page of sales.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Sale'
+                  - $ref: '#/components/schemas/Pagination'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBranch'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+    post:
+      tags: [Sales]
+      summary: Sell a stand
+      operationId: storeSale
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+      description: |
+        Books a sale and posts the journals behind it: the whole price to revenue, the unpaid part as a
+        receivable, the deposit or full settlement to bank, and the stand's cost out of Land Inventory the same
+        day. The stand is marked sold or in progress accordingly.
+
+        **Cash** settles in full on the day, so it takes no deposit - sending one above zero is a `422`.
+        **Payment plan** requires `deposit` (less than the price) and `instalmentCount` (1 to 120), and
+        schedules the instalments monthly. The deposit is deliberately *not* credited against the schedule:
+        the schedule covers the price after the deposit, and crediting it would run every plan ahead and hide
+        real arrears.
+
+        Amounts are major units. The stand must be available and on this branch's plan - another branch's
+        number answers `404`. A posting that would put the books into an impossible state answers `422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreSaleRequest'
+            examples:
+              cash:
+                summary: Cash sale
+                value:
+                  standNumber: "2001"
+                  buyerId: 181
+                  type: cash
+                  price: 12500
+                  saleDate: "2026-09-12"
+                  method: bank-transfer
+              paymentPlan:
+                summary: Payment plan, 12 months after a deposit
+                value:
+                  standNumber: "2002"
+                  buyerId: 181
+                  type: payment-plan
+                  price: 12500
+                  deposit: 2500
+                  instalmentCount: 12
+                  saleDate: "2026-09-12"
+                  method: mobile-money
+      responses:
+        "201":
+          description: The sale, with its schedule and the receipt raised for the deposit.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Sale'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: That stand is not on your branch's plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/sales/{reference}:
+    get:
+      tags: [Sales]
+      summary: One sale
+      operationId: showSale
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/SaleReference'
+      description: |
+        One sale by its reference, with the buyer, the agent who booked it, the instalment schedule and every
+        receipt taken against it. Another branch's reference answers `404`.
+      responses:
+        "200":
+          description: The sale.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Sale'
+              example:
+                data:
+                  reference: SALE-HRE-000524
+                  saleDate: "2026-08-19"
+                  type: payment-plan
+                  status: outstanding
+                  price: 12900
+                  cost: 7740
+                  deposit: 1290
+                  paid: 1290
+                  outstanding: 11610
+                  instalmentCount: 18
+                  standNumber: "3179"
+                  buyer:
+                    id: 46
+                    name: Mario Dicki II
+                    email: mertz.kaela@example.org
+                    phone: "+263 78 404 5070"
+                    nationalId: 53-775725g87
+                  soldBy: Harare Branch Agent
+                  branch: {code: HRE, name: Harare Branch, city: Harare}
+                  instalments:
+                    - sequence: 1
+                      dueDate: "2026-09-19"
+                      amount: 645
+                      paid: 0
+                      outstanding: 645
+                      isSettled: false
+                      isOverdue: false
+                  payments:
+                    - receiptNumber: RCP-HRE-001912
+                      paidOn: "2026-08-19"
+                      amount: 1290
+                      method: bank-transfer
+                      externalReference: null
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFoundInBranch'
+
+  /api/v1/sales/{reference}/payments:
+    post:
+      tags: [Sales]
+      summary: Receipt a payment
+      operationId: storeSalePayment
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/SaleReference'
+      description: |
+        Receipts money against a sale. It moves receivable to bank, allocates across the instalment schedule
+        oldest first, and settles the sale once nothing is outstanding. It never touches revenue - that was
+        recognised at signing.
+
+        `paidOn` cannot be in the future, and more than the outstanding balance is refused with `422`.
+        Modelled as creating a payment on the sale rather than as an action on it, because the receipt is the
+        thing being made - so the response is the printable receipt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorePaymentRequest'
+            example:
+              amount: 500
+              method: mobile-money
+              paidOn: "2026-09-12"
+              externalReference: ECO-88213
+      responses:
+        "201":
+          description: The receipt.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Receipt'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFoundInBranch'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/receipts:
+    get:
+      tags: [Receipts]
+      summary: The receipts ledger
+      operationId: listReceipts
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - name: search
+          in: query
+          description: Matches receipt number, sale reference, buyer name or stand number.
+          schema:
+            type: string
+            maxLength: 255
+        - $ref: '#/components/parameters/Page'
+      description: |
+        Receipts issued at the branch the request is worked from, newest first, 25 to a page, or across every
+        branch when an administrator asks for `branch=group`.
+      responses:
+        "200":
+          description: A page of receipts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PaymentListItem'
+                  - $ref: '#/components/schemas/Pagination'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBranch'
+
+  /api/v1/receipts/{receiptNumber}:
+    get:
+      tags: [Receipts]
+      summary: One printable receipt
+      operationId: showReceipt
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - name: receiptNumber
+          in: path
+          required: true
+          description: Sequential per branch, e.g. `RCP-HRE-001737`.
+          schema:
+            type: string
+          example: RCP-HRE-001737
+      description: |
+        Everything printed on a receipt: the branch, the buyer, the stand and the sale's balance. The figures
+        are read at request time rather than stored on the payment, so a reprint shows the same amount received
+        against an up-to-date balance. There is no PDF on this side - the front-end renders and prints it.
+      responses:
+        "200":
+          description: The receipt.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Receipt'
+              example:
+                data:
+                  receiptNumber: RCP-HRE-001737
+                  paidOn: "2026-09-11"
+                  issuedAt: "2026-09-11T21:46:28+02:00"
+                  amount: 267.5
+                  method: bank-transfer
+                  externalReference: null
+                  receivedBy: Harare Branch Agent
+                  branch: {code: HRE, name: Harare Branch, city: Harare}
+                  buyer:
+                    id: 28
+                    name: Alden Quigley
+                    email: retha.bogan@example.org
+                    phone: "+263 77 963 0442"
+                    nationalId: 83-912298m53
+                  sale:
+                    reference: SALE-HRE-000473
+                    saleDate: "2026-02-11"
+                    type: payment-plan
+                    price: 10700
+                    paid: 2942.5
+                    outstanding: 7757.5
+                  stand:
+                    standNumber: "3103"
+                    block: Block J
+                    road: Msasa Road
+                    areaSqm: 308
+                    township: Riverstone Park Estate
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFoundInBranch'
+
+  /api/v1/reports/trial-balance:
+    get:
+      tags: [Reports]
+      summary: Trial balance
+      operationId: trialBalance
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - $ref: '#/components/parameters/AsAt'
+      description: |
+        Every account with its net debit or credit as at `to`, and the proof that the two sides agree. A
+        negative balance is shown on the opposite side rather than as a minus.
+
+        If `inBalance` is ever false, the ledger has been written to by something other than
+        `PostJournalEntry` - which is what the diagnostics health check watches for.
+      responses:
+        "200":
+          description: The trial balance.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TrialBalance'
+              example:
+                data:
+                  asAt: "2026-09-12"
+                  branch: HRE
+                  rows:
+                    - {code: "1000", name: Bank, type: asset, debitCents: 550070837, creditCents: 0}
+                    - {code: "4000", name: Stand Sales Revenue, type: revenue, debitCents: 0, creditCents: 304470000}
+                  totalDebitCents: 1491486000
+                  totalCreditCents: 1491486000
+                  inBalance: true
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBooks'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/reports/income-statement:
+    get:
+      tags: [Reports]
+      summary: Income statement
+      operationId: incomeStatement
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/AsAt'
+      description: |
+        Revenue less cost of sales for a period. Because revenue is recognised when the stand is sold rather
+        than when the money arrives, this reports the margin *earned* in the period, not the cash collected in
+        it.
+
+        Financial years here start on 1 January, so `from` defaults to 1 January of the year `to` falls in.
+      responses:
+        "200":
+          description: The income statement.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IncomeStatement'
+              example:
+                data:
+                  from: "2026-01-01"
+                  to: "2026-09-12"
+                  branch: HRE
+                  revenue:
+                    - {code: "4000", name: Stand Sales Revenue, amountCents: 304470000}
+                  expenses:
+                    - {code: "5000", name: Cost of Sales, amountCents: 182682000}
+                  revenueCents: 304470000
+                  expensesCents: 182682000
+                  netIncomeCents: 121788000
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBooks'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/reports/balance-sheet:
+    get:
+      tags: [Reports]
+      summary: Balance sheet
+      operationId: balanceSheet
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - $ref: '#/components/parameters/AsAt'
+      description: |
+        The position as at a date. There is no period close, so retained earnings is not a posted account: it
+        is derived from every revenue and expense entry up to the cut-off and shown within equity as account
+        `3900`. That is what keeps the sheet balanced without a closing journal having to be run first.
+
+        `assetsCents` equals `liabilitiesCents + equityCents` whenever the books are sound.
+      responses:
+        "200":
+          description: The balance sheet.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/BalanceSheet'
+              example:
+                data:
+                  asAt: "2026-09-12"
+                  branch: HRE
+                  assets:
+                    - {code: "1000", name: Bank, amountCents: 550070837}
+                    - {code: "1100", name: Accounts Receivable, amountCents: 107499163}
+                  liabilities: []
+                  equity:
+                    - {code: "3000", name: Share Capital, amountCents: 833916000}
+                    - {code: "3900", name: Retained Earnings, amountCents: 263028000}
+                  assetsCents: 1096944000
+                  liabilitiesCents: 0
+                  equityCents: 1096944000
+                  retainedEarningsCents: 263028000
+                  inBalance: true
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBooks'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/reports/receivables-ageing:
+    get:
+      tags: [Reports]
+      summary: Receivables ageing
+      operationId: receivablesAgeing
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - $ref: '#/components/parameters/AsAt'
+      description: |
+        Unsettled instalments bucketed by how late they are as at `to`. `totalCents` ties back to the Accounts
+        Receivable balance on the balance sheet for the same date and scope; `overdueCents` is the total less
+        what is not yet due.
+      responses:
+        "200":
+          description: The ageing.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ReceivablesAgeing'
+              example:
+                data:
+                  asAt: "2026-09-12"
+                  branch: HRE
+                  buckets:
+                    notYetDue: 105577265
+                    days1To30: 1345941
+                    days31To60: 405832
+                    days61To90: 27625
+                    over90Days: 142500
+                  totalCents: 107499163
+                  overdueCents: 1921898
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/ForbiddenBooks'
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+  /api/v1/dashboard:
+    get:
+      tags: [Head office]
+      summary: Sales dashboard
+      operationId: dashboard
+      parameters:
+        - $ref: '#/components/parameters/BranchHeader'
+        - $ref: '#/components/parameters/BranchScope'
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/AsAt'
+      description: |
+        **Administrators only.** What the sales floor did, read from the operational tables rather than the
+        journal: stock left, what was signed in the period, how much of it has been collected, the branch
+        table, the monthly series, the cash/plan mix, the agent leaderboard and the latest sales.
+
+        It takes the same scope and dates as a statement, so the dashboard and the books can be read side by
+        side for the same office over the same period. A figure here is a count of stands and sales, not a
+        balance.
+      responses:
+        "200":
+          description: The dashboard.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Dashboard'
+              example:
+                data:
+                  from: "2026-01-01"
+                  to: "2026-09-12"
+                  branch: null
+                  totals:
+                    standsTotal: 2446
+                    standsAvailable: 1345
+                    standsSold: 758
+                    standsInProgress: 343
+                    salesCount: 499
+                    valueCents: 590220000
+                    costCents: 354132000
+                    grossProfitCents: 236088000
+                    collectedCents: 523922571
+                    outstandingCents: 204359017
+                  branches:
+                    - code: BYO
+                      name: Bulawayo Branch
+                      city: Bulawayo
+                      stands: {total: 1223, available: 679, sold: 380, in-progress: 164}
+                      salesCount: 241
+                      valueCents: 285750000
+                      costCents: 171450000
+                      collectedCents: 261041856
+                      outstandingCents: 96859854
+                  monthly:
+                    - {month: "2026-01", salesCount: 56, valueCents: 66990000, collectedCents: 52089497}
+                  mix:
+                    - {type: cash, salesCount: 313, valueCents: 370100000}
+                    - {type: payment-plan, salesCount: 186, valueCents: 220120000}
+                  topAgents:
+                    - {name: Harare Branch Agent, branch: HRE, salesCount: 258, valueCents: 304470000}
+                  recentSales:
+                    - reference: SALE-HRE-000386
+                      saleDate: "2026-08-22"
+                      standNumber: "2964"
+                      buyerName: Wilhelmine Mueller
+                      branch: HRE
+                      type: cash
+                      status: settled
+                      valueCents: 1110000
+                      paidCents: 1110000
+                      outstandingCents: 0
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: |
+            Not an administrator, or an administrator naming a branch they may not work from. The dashboard is
+            a head-office view, so the endpoint's existence is not hidden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                message: This is available to administrators only.
+        "422":
+          $ref: '#/components/responses/ValidationFailed'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A Sanctum personal access token, issued by `POST /api/v1/login`.
+    healthToken:
+      type: apiKey
+      in: header
+      name: X-Health-Token
+      description: |
+        `HEALTH_CHECK_TOKEN` from the deployed environment. Opens the diagnostics endpoint and nothing else, so
+        an unattended monitor can read it without holding a user's credentials. Compared in constant time, and
+        only when a secret has actually been configured.
+
+  parameters:
+    BranchHeader:
+      name: X-Branch
+      in: header
+      required: false
+      description: |
+        The office this request is worked from, as a branch code. An agent may only name their own branch; an
+        administrator may name any. A code that does not exist, or one the caller is not entitled to, is a
+        `403` rather than being quietly ignored - silently answering for a different branch than the caller
+        believes they are in would misfile a sale.
+
+        Omitted, the request answers for the user's home branch.
+      schema:
+        type: string
+        maxLength: 8
+      example: HRE
+    BranchScope:
+      name: branch
+      in: query
+      required: false
+      description: |
+        Overrides `X-Branch` for this call, and additionally accepts `group` for every branch consolidated.
+        `group` is administrators only; an agent naming another office or the group is a `403`.
+      schema:
+        type: string
+        maxLength: 8
+      examples:
+        ownBranch:
+          summary: One office
+          value: HRE
+        consolidated:
+          summary: Every branch at once (administrators only)
+          value: group
+    AsAt:
+      name: to
+      in: query
+      required: false
+      description: Cut-off date, inclusive. Defaults to today.
+      schema:
+        type: string
+        format: date
+      example: "2026-09-12"
+    From:
+      name: from
+      in: query
+      required: false
+      description: Start of the period. Defaults to 1 January of the year the cut-off falls in.
+      schema:
+        type: string
+        format: date
+      example: "2026-01-01"
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Page number; 25 records to a page.
+      schema:
+        type: integer
+        minimum: 1
+      example: 1
+    SaleReference:
+      name: reference
+      in: path
+      required: true
+      description: Sequential per branch, e.g. `SALE-HRE-000524`.
+      schema:
+        type: string
+      example: SALE-HRE-000524
+
+  responses:
+    Unauthorized:
+      description: No token, or a revoked one. Answered as JSON rather than a redirect.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: Unauthenticated.
+    Forbidden:
+      description: Authenticated, but not entitled to this endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: This is available to administrators only.
+    ForbiddenBranch:
+      description: |
+        The caller may not read the branch they named. An agent gets their own branch and nothing else - not
+        another office, and not the consolidated group.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            otherBranch:
+              value:
+                message: You can only read your own branch.
+            group:
+              value:
+                message: Consolidated views are for administrators only.
+    ForbiddenBooks:
+      description: The caller may not read those books.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            otherBranch:
+              value:
+                message: You can only read your own branch's books.
+            group:
+              value:
+                message: Consolidated statements are for administrators only.
+    NotFoundInBranch:
+      description: |
+        No such record **in the branch this request is worked from**. Another branch's record answers `404`
+        rather than `403`, because a 403 would confirm the reference exists.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationFailed:
+      description: |
+        Validation failed, or the posting would have put the books into an impossible state - a refusal to do
+        that is the caller's to fix, so it reads like a validation failure rather than a server fault.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+          examples:
+            validation:
+              summary: Field validation
+              value:
+                message: The deposit field is required when type is payment-plan.
+                errors:
+                  deposit: [The deposit field is required when type is payment-plan.]
+            accounting:
+              summary: An accounting refusal
+              value:
+                message: A payment of 900.00 exceeds the 500.00 still outstanding on this sale.
+    TooManyRequests:
+      description: Throttled. Sign-in allows 5/min per account and address; the health checks 60/min per address.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: Too Many Attempts.
+
+  schemas:
+
+    Error:
+      type: object
+      description: |
+        With `APP_DEBUG` on, a local response also carries `exception`, `file`, `line` and `trace`. In
+        production the message is all there is.
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          description: Field name to the messages for it. Absent on an accounting refusal, which has no field.
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required: [message]
+
+    Pagination:
+      type: object
+      description: Laravel's paginator envelope, alongside `data`.
+      properties:
+        links:
+          type: object
+          properties:
+            first: {type: [string, "null"]}
+            last: {type: [string, "null"]}
+            prev: {type: [string, "null"]}
+            next: {type: [string, "null"]}
+        meta:
+          type: object
+          properties:
+            current_page: {type: integer}
+            from: {type: [integer, "null"]}
+            last_page: {type: integer}
+            path: {type: string}
+            per_page: {type: integer}
+            to: {type: [integer, "null"]}
+            total: {type: integer}
+
+    UserRole:
+      type: string
+      enum: [sales, admin]
+      description: |
+        `sales` is fixed to one branch. `admin` may work from any branch and is the only role that reads the
+        group or the dashboard.
+
+    StandStatus:
+      type: string
+      enum: [available, sold, in-progress]
+
+    SaleStatus:
+      type: string
+      enum: [outstanding, settled]
+
+    SaleType:
+      type: string
+      enum: [cash, payment-plan]
+
+    PaymentMethod:
+      type: string
+      enum: [cash, bank-transfer, mobile-money, card]
+
+    HealthStatus:
+      type: string
+      enum: [ok, degraded, failed]
+      description: |
+        Ranked: a run reports the worst status any of its checks did. Only `failed` answers `503` - a
+        `degraded` instance is still serving and is alerted on rather than taken out of rotation.
+
+    Branch:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Used by `X-Branch` and the `branch` query parameter.
+          examples: [HRE]
+        name: {type: string, examples: [Harare Branch]}
+        city: {type: string, examples: [Harare]}
+      required: [code, name, city]
+
+    User:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        email: {type: string, format: email}
+        role:
+          $ref: '#/components/schemas/UserRole'
+        isAdmin: {type: boolean}
+        branch:
+          description: The office this request answered for. Every list and report is scoped to it.
+          oneOf:
+            - $ref: '#/components/schemas/Branch'
+            - type: "null"
+        branches:
+          type: array
+          description: The offices this user may switch between - one for an agent, all of them for an administrator.
+          items:
+            $ref: '#/components/schemas/Branch'
+      required: [id, name, email, role, isAdmin, branches]
+
+    LoginRequest:
+      type: object
+      properties:
+        email: {type: string, format: email, maxLength: 255}
+        password: {type: string}
+        deviceName:
+          type: string
+          maxLength: 255
+          description: Labels the issued token so a user can tell their sessions apart. Defaults to the User-Agent.
+      required: [email, password]
+
+    Point:
+      type: object
+      description: Plan-space metres, origin at the site plan's top-left corner.
+      properties:
+        x: {type: number}
+        y: {type: number}
+      required: [x, y]
+
+    Stand:
+      type: object
+      properties:
+        standNumber:
+          type: string
+          description: |
+            The public identifier. Unique system-wide, stable, and what the API routes on - the database id is
+            deliberately not exposed.
+          examples: ["2001"]
+        status:
+          $ref: '#/components/schemas/StandStatus'
+        block: {type: [string, "null"], examples: [Block A]}
+        road: {type: [string, "null"], examples: [Chiremba Drive]}
+        areaSqm: {type: number, examples: [332]}
+        price:
+          type: number
+          description: Major units.
+          examples: [8800]
+        updatedAt: {type: string, format: date}
+        centroid:
+          $ref: '#/components/schemas/Point'
+        points:
+          type: array
+          description: The stand's polygon, in plan-space metres.
+          items:
+            $ref: '#/components/schemas/Point'
+      required: [standNumber, status, areaSqm, price, updatedAt, centroid, points]
+
+    SitePlan:
+      type: object
+      properties:
+        name: {type: string, examples: [Riverstone Park Estate]}
+        subtitle: {type: [string, "null"]}
+        authority: {type: [string, "null"]}
+        note: {type: [string, "null"]}
+        northRotation:
+          type: number
+          description: Degrees to rotate the north arrow by.
+        bounds:
+          type: object
+          description: The drawing's extent in metres.
+          properties:
+            width: {type: number}
+            height: {type: number}
+        boundary:
+          type: array
+          items:
+            $ref: '#/components/schemas/Point'
+        roads:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              kind: {type: string}
+              name: {type: [string, "null"]}
+              label:
+                $ref: '#/components/schemas/Point'
+              width: {type: number}
+              points:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Point'
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              kind: {type: string, examples: [open-space]}
+              name: {type: string}
+              label:
+                $ref: '#/components/schemas/Point'
+              points:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Point'
+        blocks:
+          type: array
+          description: Block labels and where to draw them.
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              name: {type: string, examples: [Block A]}
+              x: {type: number}
+              y: {type: number}
+
+    Buyer:
+      type: object
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        email: {type: [string, "null"], format: email}
+        phone: {type: [string, "null"]}
+        nationalId: {type: [string, "null"]}
+        branch:
+          description: Present only where the buyer is returned with their office, as on a receipt or a sale.
+          oneOf:
+            - $ref: '#/components/schemas/Branch'
+            - type: "null"
+      required: [id, name]
+
+    StoreBuyerRequest:
+      type: object
+      properties:
+        name: {type: string, maxLength: 255}
+        email: {type: [string, "null"], format: email, maxLength: 255}
+        phone: {type: [string, "null"], maxLength: 40}
+        nationalId: {type: [string, "null"], maxLength: 40}
+      required: [name]
+
+    Instalment:
+      type: object
+      description: One line of a payment plan's schedule. Amounts are major units.
+      properties:
+        sequence: {type: integer}
+        dueDate: {type: string, format: date}
+        amount: {type: number}
+        paid: {type: number}
+        outstanding: {type: number}
+        isSettled: {type: boolean}
+        isOverdue: {type: boolean}
+
+    PaymentListItem:
+      type: object
+      description: A payment as it appears in a list. The printable receipt is `Receipt`.
+      properties:
+        receiptNumber: {type: string, examples: [RCP-HRE-001912]}
+        paidOn: {type: string, format: date}
+        amount: {type: number, description: Major units.}
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        externalReference:
+          type: [string, "null"]
+          description: The bank or mobile money reference, if there was one.
+        saleReference: {type: string}
+        standNumber: {type: [string, "null"]}
+        buyerName: {type: [string, "null"]}
+        branch:
+          $ref: '#/components/schemas/Branch'
+
+    Sale:
+      type: object
+      description: |
+        Amounts are major units. `cost` is what the stand was carried at in Land Inventory and is charged out
+        on the day of the sale.
+      properties:
+        reference: {type: string, examples: [SALE-HRE-000524]}
+        saleDate: {type: string, format: date}
+        type:
+          $ref: '#/components/schemas/SaleType'
+        status:
+          $ref: '#/components/schemas/SaleStatus'
+        price: {type: number}
+        cost: {type: number}
+        deposit: {type: number}
+        paid: {type: number}
+        outstanding: {type: number}
+        instalmentCount: {type: integer}
+        standNumber: {type: string}
+        buyer:
+          $ref: '#/components/schemas/Buyer'
+        soldBy:
+          type: [string, "null"]
+          description: The agent who booked it. Present on a single sale, not in the ledger listing.
+        branch:
+          $ref: '#/components/schemas/Branch'
+        instalments:
+          type: array
+          description: Present on a single sale; the schedule is empty for a cash sale.
+          items:
+            $ref: '#/components/schemas/Instalment'
+        payments:
+          type: array
+          description: Present on a single sale.
+          items:
+            $ref: '#/components/schemas/PaymentListItem'
+      required: [reference, saleDate, type, status, price, cost, deposit, paid, outstanding]
+
+    StoreSaleRequest:
+      type: object
+      description: |
+        `deposit` and `instalmentCount` are required for a `payment-plan` and meaningless for a `cash` sale,
+        which is settled in full on the day - sending a deposit above zero with one is a `422`.
+      properties:
+        standNumber:
+          type: string
+          description: Must be available and on this branch's plan.
+        buyerId:
+          type: integer
+          description: Must be a buyer registered at this branch.
+        type:
+          $ref: '#/components/schemas/SaleType'
+        price:
+          type: number
+          description: Major units.
+          minimum: 0.01
+          maximum: 99999999
+        saleDate:
+          type: string
+          format: date
+          description: Cannot be in the future.
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        deposit:
+          type: number
+          description: Payment plans only. Must be less than the price. Not allocated to the schedule.
+          minimum: 0
+        instalmentCount:
+          type: integer
+          description: Payment plans only.
+          minimum: 1
+          maximum: 120
+      required: [standNumber, buyerId, type, price, saleDate, method]
+
+    StorePaymentRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          description: Major units. More than the outstanding balance is refused.
+          minimum: 0.01
+          maximum: 99999999
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        paidOn:
+          type: string
+          format: date
+          description: Cannot be in the future.
+        externalReference:
+          type: [string, "null"]
+          maxLength: 255
+      required: [amount, method, paidOn]
+
+    Receipt:
+      type: object
+      description: |
+        Everything printed on a receipt. The sale figures are read at request time rather than stored, so a
+        reprint shows the same amount received against an up-to-date balance.
+      properties:
+        receiptNumber: {type: string}
+        paidOn: {type: string, format: date}
+        issuedAt: {type: [string, "null"], format: date-time}
+        amount: {type: number}
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        externalReference: {type: [string, "null"]}
+        receivedBy: {type: [string, "null"]}
+        branch:
+          $ref: '#/components/schemas/Branch'
+        buyer:
+          $ref: '#/components/schemas/Buyer'
+        sale:
+          type: object
+          properties:
+            reference: {type: string}
+            saleDate: {type: string, format: date}
+            type:
+              $ref: '#/components/schemas/SaleType'
+            price: {type: number}
+            paid: {type: number}
+            outstanding: {type: number}
+        stand:
+          type: object
+          properties:
+            standNumber: {type: string}
+            block: {type: [string, "null"]}
+            road: {type: [string, "null"]}
+            areaSqm: {type: number}
+            township: {type: string}
+
+    AccountAmount:
+      type: object
+      description: An account and its balance in integer minor units.
+      properties:
+        code: {type: string, examples: ["1000"]}
+        name: {type: string, examples: [Bank]}
+        amountCents: {type: integer}
+
+    TrialBalance:
+      type: object
+      properties:
+        asAt: {type: string, format: date}
+        branch:
+          type: [string, "null"]
+          description: The branch code, or null when the figures are consolidated.
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              code: {type: string}
+              name: {type: string}
+              type:
+                type: string
+                enum: [asset, liability, equity, revenue, expense]
+              debitCents: {type: integer}
+              creditCents: {type: integer}
+        totalDebitCents: {type: integer}
+        totalCreditCents: {type: integer}
+        inBalance:
+          type: boolean
+          description: False means the ledger has been written to outside `PostJournalEntry`.
+
+    IncomeStatement:
+      type: object
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        branch: {type: [string, "null"]}
+        revenue:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountAmount'
+        expenses:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountAmount'
+        revenueCents: {type: integer}
+        expensesCents: {type: integer}
+        netIncomeCents: {type: integer}
+
+    BalanceSheet:
+      type: object
+      properties:
+        asAt: {type: string, format: date}
+        branch: {type: [string, "null"]}
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountAmount'
+        liabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountAmount'
+        equity:
+          type: array
+          description: Includes derived Retained Earnings as account `3900` when it is not zero.
+          items:
+            $ref: '#/components/schemas/AccountAmount'
+        assetsCents: {type: integer}
+        liabilitiesCents: {type: integer}
+        equityCents: {type: integer}
+        retainedEarningsCents:
+          type: integer
+          description: Derived from revenue less expenses up to the cut-off, not posted.
+        inBalance: {type: boolean}
+
+    ReceivablesAgeing:
+      type: object
+      properties:
+        asAt: {type: string, format: date}
+        branch: {type: [string, "null"]}
+        buckets:
+          type: object
+          description: Outstanding instalment value in each bucket, in minor units.
+          properties:
+            notYetDue: {type: integer}
+            days1To30: {type: integer}
+            days31To60: {type: integer}
+            days61To90: {type: integer}
+            over90Days: {type: integer}
+        totalCents:
+          type: integer
+          description: Ties back to the Accounts Receivable balance for the same date and scope.
+        overdueCents:
+          type: integer
+          description: The total less what is not yet due.
+
+    Dashboard:
+      type: object
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        branch: {type: [string, "null"]}
+        totals:
+          type: object
+          properties:
+            standsTotal: {type: integer}
+            standsAvailable: {type: integer}
+            standsSold: {type: integer}
+            standsInProgress: {type: integer}
+            salesCount: {type: integer}
+            valueCents: {type: integer}
+            costCents: {type: integer}
+            grossProfitCents: {type: integer}
+            collectedCents: {type: integer}
+            outstandingCents: {type: integer}
+        branches:
+          type: array
+          items:
+            type: object
+            properties:
+              code: {type: string}
+              name: {type: string}
+              city: {type: string}
+              stands:
+                type: object
+                description: Stand counts by status, plus `total`.
+                additionalProperties: {type: integer}
+              salesCount: {type: integer}
+              valueCents: {type: integer}
+              costCents: {type: integer}
+              collectedCents: {type: integer}
+              outstandingCents: {type: integer}
+        monthly:
+          type: array
+          items:
+            type: object
+            properties:
+              month: {type: string, examples: ["2026-01"]}
+              salesCount: {type: integer}
+              valueCents: {type: integer}
+              collectedCents: {type: integer}
+        mix:
+          type: array
+          description: Cash against payment plan, over the period.
+          items:
+            type: object
+            properties:
+              type:
+                $ref: '#/components/schemas/SaleType'
+              salesCount: {type: integer}
+              valueCents: {type: integer}
+        topAgents:
+          type: array
+          items:
+            type: object
+            properties:
+              name: {type: string}
+              branch: {type: [string, "null"]}
+              salesCount: {type: integer}
+              valueCents: {type: integer}
+        recentSales:
+          type: array
+          items:
+            type: object
+            properties:
+              reference: {type: string}
+              saleDate: {type: string, format: date}
+              standNumber: {type: [string, "null"]}
+              buyerName: {type: [string, "null"]}
+              branch: {type: string}
+              type:
+                $ref: '#/components/schemas/SaleType'
+              status:
+                $ref: '#/components/schemas/SaleStatus'
+              valueCents: {type: integer}
+              paidCents: {type: integer}
+              outstandingCents: {type: integer}
+
+    CheckSummary:
+      type: object
+      description: |
+        Written for an anonymous caller: what is wrong, without saying where. No hosts, drivers, credentials or
+        exception text.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        message: {type: string}
+        durationMs:
+          type: number
+          description: How long the check took. A correct but slow answer is reported as `degraded`.
+      required: [status, message, durationMs]
+
+    CheckDetail:
+      type: object
+      description: A check as the diagnostics endpoint reports it - the summary, plus whatever that check knows.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        message: {type: string}
+        durationMs: {type: number}
+        detail:
+          type: object
+          description: |
+            Drivers, counts, the exception behind a failure. Never rendered by the open endpoints.
+          additionalProperties: true
+      required: [status, message, durationMs]
+
+    Liveness:
+      type: object
+      description: |
+        Who is answering. Read from configuration only, so it is available while every dependency is down.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        app: {type: string}
+        environment: {type: string, examples: [production]}
+        version:
+          type: string
+          description: '`APP_VERSION` - the release this instance was built from, so a deploy can be confirmed from outside.'
+        time: {type: string, format: date-time}
+      required: [status, app, environment, version, time]
+
+    Readiness:
+      type: object
+      description: The critical checks, and the worst status any of them reported.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        app: {type: string}
+        environment: {type: string, examples: [production]}
+        version:
+          type: string
+          description: '`APP_VERSION` - the release this instance was built from, so a deploy can be confirmed from outside.'
+        time: {type: string, format: date-time}
+        durationMs:
+          type: number
+          description: Total time for the run.
+        checks:
+          type: object
+          description: Keyed by check name - `database`, `migrations`, `cache`, `storage`, `chart-of-accounts`.
+          additionalProperties:
+            $ref: '#/components/schemas/CheckSummary'
+      required: [status, app, environment, version, time, durationMs, checks]
+
+    Diagnostics:
+      type: object
+      description: Every check with its detail, and a description of the instance that ran them.
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        app: {type: string}
+        environment: {type: string, examples: [production]}
+        version:
+          type: string
+          description: '`APP_VERSION` - the release this instance was built from, so a deploy can be confirmed from outside.'
+        time: {type: string, format: date-time}
+        durationMs:
+          type: number
+        checks:
+          type: object
+          description: The readiness checks plus `queue` and `ledger`, each with its `detail`.
+          additionalProperties:
+            $ref: '#/components/schemas/CheckDetail'
+        runtime:
+          type: object
+          description: What this instance is running. Configuration and process facts only.
+          properties:
+            php: {type: string}
+            laravel: {type: string}
+            debug: {type: boolean}
+            timezone: {type: string}
+            maintenanceMode: {type: boolean}
+            configCached: {type: boolean}
+            routesCached: {type: boolean}
+            eventsCached: {type: boolean}
+            database: {type: string}
+            cacheStore: {type: string}
+            queueConnection: {type: string}
+            filesystemDisk: {type: string}
+            memoryUsageMb: {type: number}
+            memoryPeakMb: {type: number}
+        footprint:
+          type: object
+          description: |
+            How much is in the system - useful for spotting a database that is empty when it should not be, or
+            one pointed at the wrong environment. Empty when the database could not be read.
+          properties:
+            branches: {type: integer}
+            users: {type: integer}
+            stands: {type: integer}
+            buyers: {type: integer}
+            sales: {type: integer}
+            payments: {type: integer}
+            journalEntries: {type: integer}
+      required: [status, app, environment, version, time, durationMs, checks]

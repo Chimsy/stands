@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\BalanceSheetController;
 use App\Http\Controllers\Api\V1\BranchController;
 use App\Http\Controllers\Api\V1\BuyerController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IncomeStatementController;
 use App\Http\Controllers\Api\V1\ReceiptController;
 use App\Http\Controllers\Api\V1\ReceivablesAgeingController;
@@ -17,6 +18,25 @@ use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
+    /**
+     * What a monitor asks before anybody signs in. Liveness is open and reads
+     * nothing, so it answers while the database is down; readiness runs the
+     * critical checks and answers 503 once this instance cannot serve; the
+     * diagnostics report names drivers and versions, so it is kept behind an
+     * administrator's token or the monitoring secret.
+     */
+    Route::prefix('health')->name('health.')->group(function (): void {
+        Route::get('/', [HealthController::class, 'live'])->name('live');
+
+        Route::middleware('throttle:health')->group(function (): void {
+            Route::get('ready', [HealthController::class, 'ready'])->name('ready');
+
+            Route::get('diagnostics', [HealthController::class, 'diagnostics'])
+                ->middleware('health.inspector')
+                ->name('diagnostics');
+        });
+    });
+
     Route::post('login', [TokenController::class, 'store'])
         ->middleware('throttle:login')
         ->name('login');

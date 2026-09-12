@@ -25,3 +25,10 @@ Head-office-only routes add the `admin` alias (`EnsureUserIsAdmin`) and answer 4
 The statements, the dashboard, and the sales and receipts ledgers all take the same `branch` parameter through `App\Http\Requests\Api\V1\Concerns\ResolvesBranchScope`: omitted means the branch the request is worked from, a code means that branch, and `group` means all of them and is administrators only. Add new scoped endpoints through the trait rather than re-deriving the policy - four copies of it is how one of them ends up lenient.
 
 It also closes a hole worth knowing about: `Sale::forBranch(null)` and `Payment::forBranch(null)` mean "every branch" (the statements consolidate through them), so an account with no branch would otherwise fall through a null scope to the widest possible answer. The trait aborts 403 instead. `tests/Feature/Api/V1/LedgerBranchScopeTest.php` pins all of it.
+
+## openapi.yaml is the API contract - change it in the same commit
+The API is documented by hand in `openapi.yaml` (OpenAPI 3.1) at the repository root, because nothing serves documentation - this backend returns no HTML, so there is no Swagger UI route to keep in step and no generator package in composer.json.
+
+That makes the file drift silently. A new or changed route in `routes/api.php`, a field added to a resource in `app/Http/Resources`, or a rule changed in a form request is a change to `openapi.yaml` in the same commit.
+
+Check it with `npx @redocly/cli lint openapi.yaml`. Four warnings are expected and deliberate: no licence, a localhost server entry, and no 4xx on the two probes that genuinely have none.

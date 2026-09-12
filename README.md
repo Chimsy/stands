@@ -115,6 +115,9 @@ another branch's books, the group, and the dashboard.
 
 | Method | Route | |
 | --- | --- | --- |
+| `GET` | `/api/v1/health` | Liveness. Open, reads nothing, always `200` while the process is up. |
+| `GET` | `/api/v1/health/ready` | Readiness. Open; `503` once this instance cannot serve. |
+| `GET` | `/api/v1/health/diagnostics` | Full report. Administrators, or the `X-Health-Token` secret. |
 | `POST` | `/api/v1/login` | Exchanges credentials for a token. Throttled to 5/min per account and address. |
 | `POST` | `/api/v1/logout` | Revokes the calling token only. |
 | `GET` | `/api/v1/user` | The account behind the current token, and its branch. |
@@ -136,6 +139,63 @@ another branch's books, the group, and the dashboard.
 
 Stands are identified by their surveyed stand number, not a database id.
 Coordinates are metres on the site plan, origin at its top-left corner.
+
+## Health and monitoring
+
+Three endpoints, because three different things ask. All of them answer `200`
+while the application is usable and `503` once it is not, so a monitor needs no
+rule beyond the status code, and `degraded` - serving, but something wants
+looking at - stays `200`.
+
+| Endpoint | Point it at | Runs |
+| --- | --- | --- |
+| `/api/v1/health` | The orchestrator's liveness probe | Nothing. It answers through a database outage on purpose: a failing dependency should not restart a healthy container. |
+| `/api/v1/health/ready` | The load balancer | Database, pending migrations, a cache round trip, storage writability, and the accounts the posting rules name by code. |
+| `/api/v1/health/diagnostics` | An alerting monitor, or a person | All of the above with detail, plus the queue backlog and **the ledger's total debits against its total credits**, and a description of the instance. |
+
+The ledger check is the one to page on: `PostJournalEntry` refuses an entry that
+does not balance, so a `failed` there means something wrote to `journal_lines`
+behind its back and every statement derived from them has stopped being
+trustworthy.
+
+Diagnostics names drivers, versions and table sizes, so it is never public. An
+administrator's token opens it; so does `HEALTH_CHECK_TOKEN` in an
+`X-Health-Token` header, which is how an unattended monitor reads it without
+holding anybody's credentials. `APP_VERSION` is echoed back by all three, so a
+deploy can be confirmed from outside.
+
+Checks are registered in `config/health.php`; adding one is a class implementing
+`App\Support\Health\HealthCheck` and a line of configuration. Thresholds
+(`HEALTH_SLOW_MS`, `HEALTH_MAX_QUEUE_BACKLOG`, `HEALTH_MAX_FAILED_JOBS`) decide
+where healthy stops and degraded begins.
+
+## API reference (OpenAPI)
+
+[`openapi.yaml`](openapi.yaml) is the whole `v1` API as an OpenAPI 3.1 document: every endpoint and its
+parameters, the branch-scoping rules, request and response schemas, the error shapes, and worked examples
+taken from the seeded books.
+
+Nothing serves it - this backend returns no HTML by design - so read it with whichever tool you prefer:
+
+```bash
+npx @redocly/cli preview-docs openapi.yaml    # Redoc, in a browser
+npx @redocly/cli lint openapi.yaml            # after changing the API
+```
+
+For Swagger UI itself, without installing anything into the project:
+
+```bash
+docker run --rm -p 8080:8080 -e SWAGGER_JSON=/spec/openapi.yaml -v "$PWD:/spec" swaggerapi/swagger-ui
+```
+
+WebStorm renders `openapi.yaml` in an editor tab and will fire requests from it; so will
+[editor.swagger.io](https://editor.swagger.io) if you would rather paste it in. Anything that "tries it out"
+needs a token from `POST /api/v1/login` first - the spec declares the bearer scheme, so the tool will offer
+somewhere to put it.
+
+The document is written by hand and is part of the API's contract: change a route, a resource or a form
+request, and change it in the same commit. Generating it from the code instead would mean adding a package
+such as `dedoc/scramble`, which is a dependency decision, not a documentation one.
 
 ## Tests
 

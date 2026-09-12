@@ -36,5 +36,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(5)->by(
             Str::transliterate(Str::lower($request->string('email')).'|'.$request->ip())
         ));
+
+        /**
+         * The readiness and diagnostics checks each cost a few round trips, so
+         * they are capped per address. Liveness is deliberately not throttled:
+         * it reads nothing, and a monitor must be able to tell "the application
+         * is down" from "you polled too often".
+         */
+        RateLimiter::for('health', function (Request $request) {
+            $perMinute = (int) config('health.rate_limit');
+
+            return $perMinute > 0 ? Limit::perMinute($perMinute)->by($request->ip()) : Limit::none();
+        });
     }
 }

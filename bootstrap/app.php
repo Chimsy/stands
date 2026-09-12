@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\AccountingException;
+use App\Http\Middleware\EnsureHealthInspector;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActiveBranch;
 use Illuminate\Foundation\Application;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'branch' => ResolveActiveBranch::class,
             'admin' => EnsureUserIsAdmin::class,
+            'health.inspector' => EnsureHealthInspector::class,
         ]);
 
         /**
