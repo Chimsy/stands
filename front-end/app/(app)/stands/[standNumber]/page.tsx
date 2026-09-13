@@ -81,7 +81,7 @@ export default async function StandProfilePage(props: PageProps<"/stands/[standN
           {existingSale && (
             <Link
               href={`/sales/${existingSale.reference}`}
-              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 dark:bg-brand-400 dark:text-brand-950 dark:hover:bg-brand-300"
             >
               Open sale {existingSale.reference}
             </Link>

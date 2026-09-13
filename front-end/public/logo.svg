@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 96" fill="none" role="img" aria-label="Beyond Reality - Housing &amp; Land Developers">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#56b3ec"/>
+      <stop offset="100%" stop-color="#1179bd"/>
+    </linearGradient>
+    <clipPath id="roundel"><circle cx="32" cy="32" r="25"/></clipPath>
+  </defs>
+  <g transform="translate(16 16)">
+    <path d="M6.6 41.2a27 27 0 0 0 50.8 0" stroke="#12873f" stroke-width="5.5" stroke-linecap="round"/>
+    <circle cx="32" cy="32" r="25" fill="url(#sky)"/>
+    <g clip-path="url(#roundel)">
+      <path d="M2 34c10 8 20 8 30 4s20-4 32 2v30H2Z" fill="#12873f"/>
+    </g>
+    <g fill="#ffffff" stroke="#1179bd" stroke-width="1.4" stroke-linejoin="round">
+      <path d="M38 16h3.5v9H38z"/>
+      <path d="M32 15 45.5 28H18.5z"/>
+      <path d="M22.5 27.5h19v12h-19z"/>
+    </g>
+    <path d="M29 32h6v7.5h-6z" fill="#1179bd"/>
+  </g>
+  <g font-family="'Source Serif 4','Iowan Old Style',Georgia,serif">
+    <text x="92" y="50" font-size="34" font-weight="700" letter-spacing="-0.5">
+      <tspan fill="#0d6b33">BEYOND</tspan><tspan fill="#0f6098" dx="10">REALITY</tspan>
+    </text>
+    <text x="94" y="70" font-size="11" font-weight="600" letter-spacing="2.4" fill="#0f6098">
+      HOUSING <tspan fill="#12873f">&amp;</tspan> LAND DEVELOPERS
+    </text>
+  </g>
+</svg>

@@ -66,7 +66,7 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search stand number, road or block…"
-              className="w-full rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
+              className="w-full rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-marine-500 focus:ring-2 focus:ring-marine-500/25 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
             />
           </label>
         </form>
@@ -117,7 +117,7 @@ export function SiteMapExplorer({ plan, stands }: { plan: SitePlan; stands: Stan
               <div className="flex gap-2">
                 <Link
                   href={`/stands/${selected.standNumber}`}
-                  className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                  className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-center text-sm font-medium text-white transition-colors hover:bg-brand-700 dark:bg-brand-400 dark:text-brand-950 dark:hover:bg-brand-300"
                 >
                   Full profile
                 </Link>
@@ -188,7 +188,7 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
         active
-          ? "border-transparent bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
+          ? "border-transparent bg-marine-600 text-white dark:bg-marine-400 dark:text-marine-950"
           : "border-black/[.08] text-zinc-600 hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-white/[.08]"
       }`}
     >

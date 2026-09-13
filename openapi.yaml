@@ -1,11 +1,11 @@
 openapi: 3.1.0
 
 info:
-  title: Stand Locator API
+  title: Beyond Reality API
   version: "1.0.0"
   summary: Branch-scoped stand sales, recorded as double-entry bookkeeping.
   description: |
-    The `v1` API behind the Stand Locator: a stand sales system whose selling and receipting are recorded as
+    The `v1` API behind Beyond Reality: a stand sales system whose selling and receipting are recorded as
     double-entry bookkeeping, so the financial statements are derived from the ledger rather than assembled
     from summaries.
 
@@ -131,7 +131,7 @@ paths:
                 $ref: '#/components/schemas/Liveness'
               example:
                 status: ok
-                app: Stand Locator
+                app: Beyond Reality
                 environment: production
                 version: 2026.09.12-1
                 time: "2026-09-12T22:38:37+02:00"
@@ -168,7 +168,7 @@ paths:
                 $ref: '#/components/schemas/Readiness'
               example:
                 status: ok
-                app: Stand Locator
+                app: Beyond Reality
                 environment: production
                 version: 2026.09.12-1
                 time: "2026-09-12T22:38:37+02:00"
@@ -204,7 +204,7 @@ paths:
                 $ref: '#/components/schemas/Readiness'
               example:
                 status: failed
-                app: Stand Locator
+                app: Beyond Reality
                 environment: production
                 version: 2026.09.12-1
                 time: "2026-09-12T22:38:37+02:00"
@@ -262,7 +262,7 @@ paths:
                 $ref: '#/components/schemas/Diagnostics'
               example:
                 status: ok
-                app: Stand Locator
+                app: Beyond Reality
                 environment: production
                 version: 2026.09.12-1
                 time: "2026-09-12T22:38:42+02:00"
@@ -360,7 +360,7 @@ paths:
                 $ref: '#/components/schemas/Diagnostics'
               example:
                 status: failed
-                app: Stand Locator
+                app: Beyond Reality
                 environment: production
                 version: 2026.09.12-1
                 time: "2026-09-12T22:38:42+02:00"

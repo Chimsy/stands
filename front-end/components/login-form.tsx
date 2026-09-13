@@ -21,7 +21,7 @@ export function LoginForm({ next }: { next: string }) {
           name="email"
           autoComplete="username"
           required
-          className="rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
+          className="rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-marine-500 focus:ring-2 focus:ring-marine-500/25 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
         />
       </label>
 
@@ -32,7 +32,7 @@ export function LoginForm({ next }: { next: string }) {
           name="password"
           autoComplete="current-password"
           required
-          className="rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
+          className="rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-marine-500 focus:ring-2 focus:ring-marine-500/25 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
         />
       </label>
 
@@ -54,7 +54,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-lg bg-zinc-900 px-3 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+      className="rounded-lg bg-brand-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-60 dark:bg-brand-400 dark:text-brand-950 dark:hover:bg-brand-300"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>

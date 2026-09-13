@@ -28,7 +28,7 @@ export function BranchSwitcher({ user }: { user: AuthenticatedUser }) {
         name="branch"
         defaultValue={user.branch?.code ?? ""}
         onChange={() => form.current?.requestSubmit()}
-        className="rounded-full border border-black/[.08] bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 focus:border-zinc-400 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-300"
+        className="rounded-full border border-black/[.08] bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 focus:border-marine-500 focus:ring-2 focus:ring-marine-500/25 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-300"
       >
         {user.branches.map((branch) => (
           <option key={branch.code} value={branch.code}>

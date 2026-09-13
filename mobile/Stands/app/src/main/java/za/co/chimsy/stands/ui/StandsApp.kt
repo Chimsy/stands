@@ -120,4 +120,4 @@ private fun Destination.icon() = when (this) {
 }
 
 private fun androidx.navigation.NavDestination?.titleOrDefault(): String =
-    Destination.entries.firstOrNull { it.route == this?.route }?.label ?: "Stand Locator"
+    Destination.entries.firstOrNull { it.route == this?.route }?.label ?: "Beyond Reality"

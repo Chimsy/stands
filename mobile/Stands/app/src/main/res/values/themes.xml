@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Stands" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Only the window behind Compose. Painting it the brand's paper stops the
+      white flash between the launcher icon and the first composed frame.
+    -->
+    <style name="Theme.Stands" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper_light</item>
+    </style>
 </resources>

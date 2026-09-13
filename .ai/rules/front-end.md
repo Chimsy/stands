@@ -24,3 +24,8 @@ An administrator's chosen office lives in the httpOnly `stand_branch` cookie and
 Do not use `Intl.NumberFormat` with `notation: "compact"` anywhere rendered on both sides. Node's ICU and the browser's round it differently (`$0.0` against `$0`), which fails hydration - and a hydration failure here silently kills every client interaction on the page. `formatCompactCents` in `lib/format.ts` does it by hand instead.
 
 Chart colours are the `--viz-*` tokens in `globals.css`, assigned in a fixed order and validated for colour-blind separation and contrast against this app's actual surfaces. They are not interchangeable with the `--map-*` tokens, which encode stand status - green/amber/red is unusable as a chart palette (deutan ΔE under 6).
+
+## The brand palette and the logo's five copies
+Beyond Reality has two inks: `--color-brand-*` (grass green, the primary action) and `--color-marine-*` (sky blue, selection/focus/links), declared as fixed scales in `@theme` in `app/globals.css`. Light and dark pick different *steps* through `dark:` variants - never redefine a scale value under a media query, or a utility stops meaning one hue. The `--brand-green/blue/sky` vars beneath them do flip, because SVG fills cannot use a `dark:` variant.
+
+The logo is one 64-unit drawing kept in five places: `components/brand-logo.tsx` (the live one, `--brand-*` vars), `app/icon.svg` and `public/logo.svg` (literal hex - a detached SVG has no page to inherit from), and on the Android side `res/drawable/ic_brand_mark.xml` plus the two `ic_launcher_*` drawables. Change the paths in all of them together. `BrandLogo tone="fixed"` exists for the receipt, which is white paper in either theme.

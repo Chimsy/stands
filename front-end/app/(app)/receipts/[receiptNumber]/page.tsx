@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { BrandLogo } from "@/components/brand-logo";
 import { PrintButton } from "@/components/print-button";
 import { formatDate, formatPrice } from "@/lib/format";
 import { getReceipt } from "@/lib/trading";
@@ -41,6 +42,8 @@ export default async function ReceiptPage(props: PageProps<"/receipts/[receiptNu
       <article className="flex flex-col gap-6 rounded-xl border border-black/[.08] bg-white p-8 text-zinc-900 print:rounded-none print:border-0 print:p-0 dark:border-white/[.145]">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-5">
           <div>
+            {/* Letterhead: the same lock-up on screen, on paper and in the PDF. */}
+            <BrandLogo tone="fixed" className="mb-3" />
             <h1 className="text-lg font-semibold">{receipt.branch.name}</h1>
             <p className="text-sm text-zinc-500">{receipt.stand.township}</p>
             <p className="text-sm text-zinc-500">{receipt.branch.city}</p>

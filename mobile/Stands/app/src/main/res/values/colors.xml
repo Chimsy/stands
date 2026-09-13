@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  The brand inks as platform resources, for the things Compose does not paint:
+  the launcher icon and the window background behind the first frame. Keep them
+  in step with Color.kt.
+-->
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <color name="brand_green">#FF12873F</color>
+    <color name="brand_green_dark">#FF0D6B33</color>
+    <color name="brand_green_light">#FF3CC275</color>
+    <color name="marine_blue">#FF1179BD</color>
+    <color name="marine_blue_light">#FF56B3EC</color>
+    <color name="paper_light">#FFF6F8F6</color>
+    <color name="paper_dark">#FF07100C</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

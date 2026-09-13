@@ -1,37 +1,78 @@
 @import "tailwindcss";
 
+/*
+ * Beyond Reality brand palette. Two families, taken from the logo: the grass
+ * green of the wordmark and the sky blue of the roundel. Both are full scales
+ * with fixed values - light and dark pick different *steps* through `dark:`
+ * variants rather than redefining a colour, so a utility always means one hue.
+ */
+@theme {
+  --color-brand-50: #eefbf2;
+  --color-brand-100: #d6f5e0;
+  --color-brand-200: #aeeac4;
+  --color-brand-300: #76d99f;
+  --color-brand-400: #3cc275;
+  --color-brand-500: #18a84f;
+  --color-brand-600: #12873f;
+  --color-brand-700: #0d6b33;
+  --color-brand-800: #0d552b;
+  --color-brand-900: #0c4625;
+  --color-brand-950: #042713;
+
+  --color-marine-50: #eff8fe;
+  --color-marine-100: #daeefc;
+  --color-marine-200: #bde1fa;
+  --color-marine-300: #8fcef5;
+  --color-marine-400: #56b3ec;
+  --color-marine-500: #2b98dc;
+  --color-marine-600: #1179bd;
+  --color-marine-700: #0f6098;
+  --color-marine-800: #11517c;
+  --color-marine-900: #134466;
+  --color-marine-950: #0c2b44;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light dark;
+
+  --background: #f6f8f6;
+  --foreground: #10231a;
+
+  /* The two logo inks, for SVG fills and gradients that are not utilities. */
+  --brand-green: #12873f;
+  --brand-blue: #1179bd;
+  --brand-sky: #56b3ec;
 
   /* Site plan palette */
-  --map-paper: #f7f5ef;
-  --map-ink: #3f3f46;
-  --map-line: #9c9a93;
-  --map-road: #e6e3db;
-  --map-road-line: #c9c5bb;
-  --map-open-space: #cfe3c8;
-  --map-institutional: #cfdcea;
-  --map-commercial: #e6d6ea;
-  --map-available: #a7e8bd;
-  --map-sold: #f7b6bd;
-  --map-progress: #f8d98a;
-  --map-match: #2563eb;
-  --map-selected: #111827;
+  --map-paper: #f5f7f3;
+  --map-ink: #34443c;
+  --map-line: #97a49b;
+  --map-road: #e4e8e2;
+  --map-road-line: #c6cdc4;
+  --map-open-space: #c8e5cd;
+  --map-institutional: #cbe1f2;
+  --map-commercial: #e7d8ef;
+  --map-available: #86e0a8;
+  --map-sold: #f9adb6;
+  --map-progress: #f9d275;
+  --map-match: #1179bd;
+  --map-selected: #0c2b44;
   --map-selected-fill: #ffffff33;
 
   /*
    * Dashboard charts. Series hues are assigned in a fixed order and were
    * validated for colour-blind separation and contrast against the surfaces
-   * this app actually renders on (white here, zinc-950 in dark mode) - they are
-   * not interchangeable with the map palette above, which encodes stand status.
+   * this app actually renders on (near-white here, near-black in dark mode) -
+   * they are not interchangeable with the map palette above, which encodes
+   * stand status. Signed and plan are the two brand inks; collected stays the
+   * warm third hue that keeps blue/orange/green separable under deuteranopia.
    */
-  --viz-signed: #2a78d6;
+  --viz-signed: #1179bd;
   --viz-collected: #eb6834;
-  --viz-plan: #1baf7a;
-  --viz-track: #cde2fb;
-  --viz-grid: #e1e0d9;
-  --viz-axis: #c3c2b7;
+  --viz-plan: #18a84f;
+  --viz-track: #cfe6f8;
+  --viz-grid: #dde5dd;
+  --viz-axis: #bcc8bd;
   --viz-surface: #ffffff;
 }
 
@@ -40,36 +81,41 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-brand: var(--font-brand-serif), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #07100c;
+    --foreground: #e8f1ea;
 
-    --map-paper: #17181b;
-    --map-ink: #d4d4d8;
-    --map-line: #55565c;
-    --map-road: #26272b;
-    --map-road-line: #3a3b40;
-    --map-open-space: #24402c;
-    --map-institutional: #24354a;
-    --map-commercial: #3a2b45;
-    --map-available: #2f7350;
-    --map-sold: #7d3341;
-    --map-progress: #7d6127;
-    --map-match: #60a5fa;
-    --map-selected: #fafafa;
+    --brand-green: #3cc275;
+    --brand-blue: #56b3ec;
+    --brand-sky: #8fcef5;
+
+    --map-paper: #101a15;
+    --map-ink: #cbdcd0;
+    --map-line: #506056;
+    --map-road: #1c2822;
+    --map-road-line: #2f3c35;
+    --map-open-space: #1e4029;
+    --map-institutional: #1c3b53;
+    --map-commercial: #382a47;
+    --map-available: #2f8f57;
+    --map-sold: #8a3846;
+    --map-progress: #8a6a26;
+    --map-match: #56b3ec;
+    --map-selected: #f2f8f3;
     --map-selected-fill: #ffffff1f;
 
     /* The same hues re-stepped for the dark surface, not an automatic flip. */
-    --viz-signed: #3987e5;
-    --viz-collected: #d95926;
-    --viz-plan: #199e70;
-    --viz-track: #184f95;
-    --viz-grid: #2c2c2a;
-    --viz-axis: #383835;
-    --viz-surface: #09090b;
+    --viz-signed: #3d9fdf;
+    --viz-collected: #f0763f;
+    --viz-plan: #2fbb62;
+    --viz-track: #124b74;
+    --viz-grid: #1e2a23;
+    --viz-axis: #2a382f;
+    --viz-surface: #0b1410;
   }
 }
 
@@ -77,6 +123,19 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/*
+ * The logo's two inks read as one rule, which is what carries the brand onto
+ * pages that are otherwise all figures and tables.
+ */
+.brand-rule {
+  background-image: linear-gradient(
+    90deg,
+    var(--brand-blue) 0%,
+    var(--brand-sky) 35%,
+    var(--brand-green) 100%
+  );
 }
 
 /*
@@ -91,13 +150,19 @@ body {
 
 /*
  * A receipt is a document the buyer keeps, so printing it drops the app's
- * chrome and forces light ink on white regardless of the viewer's theme.
+ * chrome and forces light ink on white regardless of the viewer's theme. The
+ * logo keeps its colours - it is the letterhead.
  */
 @media print {
   html,
   body {
     background: #fff !important;
     color: #000 !important;
+  }
+
+  .brand-rule {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   @page {

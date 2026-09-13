@@ -20,3 +20,6 @@ Point the app at a backend with `-Pstands.apiBaseUrl=...`; never hard-code a wor
 `stands.devHostAddress` defaults to `10.0.2.2` only when `stands.apiBaseUrl` names a local backend (`localhost`, `.test`, `.localhost`); against a deployed host it defaults to empty and DNS resolves normally.
 
 This is not cosmetic: when the default base URL was pointed at the live API while the override still defaulted to `10.0.2.2`, every debug build sent `magaya.chimsy.co.za` to the workstation and login died with a 15s `SocketTimeoutException` to `/10.0.2.2:443` - while OkHttp's log still showed the public URL, because the rewrite happens in the resolver, not in the request.
+
+## Material You is off on purpose
+`StandsTheme` defaults `dynamicColor = false`. Turning it back on lets the handset's wallpaper repaint the whole head-office view, which throws away the brand and means the green a branch figure is shown in is not the green on the dashboard. The schemes in `ui/theme/Theme.kt` are built from `Color.kt`, whose values are the same hex as the web app's `--color-brand-*` / `--color-marine-*` scales - keep the two in step.

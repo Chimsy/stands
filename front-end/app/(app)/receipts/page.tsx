@@ -34,7 +34,7 @@ export default async function ReceiptsPage(props: PageProps<"/receipts">) {
               name="search"
               defaultValue={term}
               placeholder="Receipt number, buyer, stand or sale…"
-              className="w-full rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
+              className="w-full rounded-lg border border-black/[.08] bg-white px-3.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-marine-500 focus:ring-2 focus:ring-marine-500/25 focus:outline-none dark:border-white/[.145] dark:bg-zinc-950 dark:text-zinc-50"
             />
           </label>
         </form>

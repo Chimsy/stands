@@ -188,7 +188,7 @@ function ScopeLink({ href, active, children }: { href: string; active: boolean; 
       href={href}
       className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
         active
-          ? "border-transparent bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-900"
+          ? "border-transparent bg-marine-600 text-white dark:bg-marine-400 dark:text-marine-950"
           : "border-black/[.08] text-zinc-600 hover:bg-black/[.04] dark:border-white/[.145] dark:text-zinc-400 dark:hover:bg-white/[.08]"
       }`}
     >

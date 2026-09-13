@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Beyond Reality roundel, the same 64-unit master as the web app's
+  components/brand-logo.tsx. Kept as a vector so it is one file for every
+  density and stays sharp on a tablet.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- The swoosh that wraps the roundel from the left round to the right. -->
+    <path
+        android:pathData="M6.6,41.2a27,27 0 0 0 50.8,0"
+        android:strokeColor="#FF12873F"
+        android:strokeWidth="5.5"
+        android:strokeLineCap="round" />
+
+    <path android:pathData="M32,7a25,25 0 1 0 0,50a25,25 0 1 0 0,-50z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="7"
+                android:endX="32"
+                android:endY="57"
+                android:type="linear">
+                <item android:color="#FF56B3EC" android:offset="0.0" />
+                <item android:color="#FF1179BD" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <group>
+        <clip-path android:pathData="M32,7a25,25 0 1 0 0,50a25,25 0 1 0 0,-50z" />
+        <path
+            android:fillColor="#FF12873F"
+            android:pathData="M2,34c10,8 20,8 30,4s20,-4 32,2v30h-62z" />
+    </group>
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FF1179BD"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:pathData="M38,16h3.5v9h-3.5z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FF1179BD"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:pathData="M32,15L45.5,28H18.5z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FF1179BD"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:pathData="M22.5,27.5h19v12h-19z" />
+    <path
+        android:fillColor="#FF1179BD"
+        android:pathData="M29,32h6v7.5h-6z" />
+</vector>
